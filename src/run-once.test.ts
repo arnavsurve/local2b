@@ -18,28 +18,28 @@ beforeAll(() => {
 
 test('returns the command exit code and leaves no box behind', async () => {
   const { ctx, alive } = fakeContext({ execExitCode: 3, failExecWhen: null });
-  const exitCode = await runOnce({ ctx, opts, cmd: 'yarn test', keep: false });
+  const exitCode = await runOnce({ ctx, opts, cmd: 'yarn test', label: 'yarn test', keep: false });
   expect(exitCode).toBe(3);
   expect([...alive]).toEqual([]);
 });
 
 test('destroys the box even when the command blows up', async () => {
   const { ctx, alive } = fakeContext({ execExitCode: 0, failExecWhen: 'explode' });
-  await expect(runOnce({ ctx, opts, cmd: 'explode', keep: false })).rejects.toThrow('exec blew up');
+  await expect(runOnce({ ctx, opts, cmd: 'explode', label: 'explode', keep: false })).rejects.toThrow('exec blew up');
   expect([...alive]).toEqual([]);
 });
 
 test('destroys the box when setup fails after it was created', async () => {
   const { ctx, alive } = fakeContext({ execExitCode: 1, failExecWhen: null });
   await expect(
-    runOnce({ ctx, opts: { ...opts, repo: 'o/r' }, cmd: 'true', keep: false })
+    runOnce({ ctx, opts: { ...opts, repo: 'o/r' }, cmd: 'true', label: 'true', keep: false })
   ).rejects.toThrow('git clone failed');
   expect([...alive]).toEqual([]);
 });
 
 test('keep leaves the box alive for follow-up commands', async () => {
   const { ctx, alive } = fakeContext({ execExitCode: 0, failExecWhen: null });
-  await runOnce({ ctx, opts, cmd: 'true', keep: true });
+  await runOnce({ ctx, opts, cmd: 'true', label: 'true', keep: true });
   expect([...alive]).toEqual(['run-test']);
 });
 

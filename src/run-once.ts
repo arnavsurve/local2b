@@ -19,11 +19,14 @@ export async function runOnce({
   ctx,
   opts,
   cmd,
+  label,
   keep,
 }: {
   ctx: Context;
   opts: ProvisionOpts;
   cmd: string;
+  /** Human-readable form of `cmd` for progress output. */
+  label: string;
   keep: boolean;
 }) {
   const box = await provisionBox({ ctx, opts });
@@ -39,7 +42,7 @@ export async function runOnce({
   process.once('SIGTERM', onSignal);
 
   try {
-    step(`running: ${cmd}`);
+    step(`running: ${label}`);
     return await run({ box, cmd, cwd: box.workdir });
   } finally {
     process.off('SIGINT', onSignal);

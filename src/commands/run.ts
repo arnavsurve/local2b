@@ -30,6 +30,7 @@ export const run: Command = async ({ ctx, args }) => {
     ctx,
     keep: values.keep,
     cmd: joinCommand(tail),
+    label: tail.join(' '),
     opts: {
       name,
       repo,
