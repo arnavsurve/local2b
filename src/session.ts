@@ -1,0 +1,79 @@
+import type { Box } from './providers/types';
+import {
+  githubToken,
+  loadSecrets,
+  toEnvFile,
+  type SecretSource,
+} from './secrets';
+
+export const ENV_FILE = '/dev/shm/l2b.env';
+
+const CREDENTIAL_HELPER = `git config --global credential.helper '!f() { echo username=x-access-token; echo password=$GH_TOKEN; }; f'`;
+
+export class CommandFailedError extends Error {
+  constructor(
+    readonly what: string,
+    readonly exitCode: number
+  ) {
+    super(`${what} failed (exit ${exitCode})`);
+  }
+}
+
+export function withEnv(cmd: string) {
+  return `[ -f ${ENV_FILE} ] && . ${ENV_FILE}; ${cmd}`;
+}
+
+/**
+ * Credentials are resolved locally at call time and written to the sandbox's
+ * tmpfs, never baked into an image or written to its disk.
+ */
+export async function pushCreds({
+  box,
+  sources,
+}: {
+  box: Box;
+  sources: SecretSource[];
+}) {
+  const vars: Record<string, string> = { GH_TOKEN: await githubToken() };
+  for (const source of sources) Object.assign(vars, await loadSecrets(source));
+  await box.writeFile({ path: ENV_FILE, content: toEnvFile(vars) });
+  await box.exec({
+    cmd: `chmod 600 ${ENV_FILE}`,
+    cwd: '/',
+    onOutput: () => {},
+  });
+}
+
+export async function configureGit({ box }: { box: Box }) {
+  await run({ box, cmd: CREDENTIAL_HELPER, cwd: '/' });
+}
+
+export async function scrubCreds({ box }: { box: Box }) {
+  await box.exec({ cmd: `rm -f ${ENV_FILE}`, cwd: '/', onOutput: () => {} });
+}
+
+/** Streams output to this process and resolves with the remote exit code. */
+export function run({ box, cmd, cwd }: { box: Box; cmd: string; cwd: string }) {
+  return box.exec({
+    cmd: withEnv(cmd),
+    cwd,
+    onOutput: ({ stream, data }) => {
+      (stream === 'stdout' ? process.stdout : process.stderr).write(data);
+    },
+  });
+}
+
+export async function runChecked({
+  box,
+  cmd,
+  cwd,
+  what,
+}: {
+  box: Box;
+  cmd: string;
+  cwd: string;
+  what: string;
+}) {
+  const exitCode = await run({ box, cmd, cwd });
+  if (exitCode !== 0) throw new CommandFailedError(what, exitCode);
+}

@@ -1,9 +1,21 @@
 {
   "name": "local2b",
+  "version": "0.1.0",
+  "description": "Spin up remote dev sandboxes for coding agents and your own shell",
+  "license": "MIT",
   "private": true,
   "type": "module",
   "bin": { "l2b": "src/cli.ts" },
-  "scripts": { "typecheck": "tsc --noEmit" },
-  "dependencies": { "e2b": "^2.62.1" },
-  "devDependencies": { "@types/bun": "^1.4.4", "typescript": "^5" }
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "e2b": "^2.62.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.4.4",
+    "typescript": "^5"
+  }
 }
