@@ -1,0 +1,13 @@
+{
+  "provider": "e2b",
+  "secrets": [{ "type": "doppler", "project": "my-project", "config": "dev" }],
+  "repos": {
+    "my-org/my-repo": { "install": "yarn install" }
+  },
+  "e2b": {
+    "apiKey": { "from": "doppler", "project": "my-project", "config": "dev", "name": "E2B_API_KEY" },
+    "cpuCount": 8,
+    "memoryMB": 16384,
+    "npmGlobals": []
+  }
+}

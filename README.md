@@ -1,25 +1,57 @@
 # local2b
 
-Toolkit for pushing dev work (worktrees, dev servers, test suites) onto remote e2b sandboxes so local pi / Claude Code / Codex sessions can spin up compute on demand instead of eating local disk and RAM.
+Run dev work (worktrees, dev servers, test suites) on remote sandboxes instead of your laptop. `l2b` is a small CLI that local coding agents (pi, Claude Code, Codex, ...) or you can call to spin up compute, run commands in it, and tear it down.
 
-## Usage
+Providers are pluggable; [e2b](https://e2b.dev) is the first one.
+
+## Quick start
 
     bun install
-    l2b up my-task --repo Create-Inc/escher --branch main --doppler anyone-shared-credentials/dev
-    l2b exec my-task --cwd /home/user/escher -- yarn typecheck
-    l2b url my-task 3000
-    l2b pause my-task | l2b down my-task | l2b ls
+    cp config.example.json ~/.config/l2b/config.json   # edit to taste
+    bun src/cli.ts image build                          # once: build the base image
+    bun src/cli.ts bake my-org/my-repo                  # once per repo: mirror + warm install
+    bun src/cli.ts up task1 --repo my-org/my-repo --branch feature/x
+    bun src/cli.ts exec task1 --cwd /home/user/work/feature-x -- yarn test
+    bun src/cli.ts url task1 3000
+    bun src/cli.ts down task1
 
-Needs a valid `E2B_API_KEY`, plus local `gh` and `doppler` logins.
+Link `src/cli.ts` onto your PATH as `l2b` for convenience. Requires [Bun](https://bun.sh), and `gh` for GitHub auth (or `GH_TOKEN`). Doppler is optional.
 
-## Credential model
+## Commands
 
-Credentials are resolved locally at call time and written to the sandbox's tmpfs (`/dev/shm/l2b.env`, mode 600), sourced on every `exec`. Nothing is baked into templates or written to sandbox disk. `l2b creds <name>` refreshes them. Paused sandboxes snapshot memory, so they still hold the secrets.
+| Command | What it does |
+| --- | --- |
+| `up <name> [--repo o/r] [--branch b] [--full] [--doppler p/c] [--image ref]` | Create a sandbox, push credentials, check out a branch |
+| `bake <o/r> [--install cmd]` | Build a per-repo snapshot: bare partial mirror plus a warm install |
+| `exec <name> [--cwd dir] -- <cmd...>` | Run a command with secrets in its environment |
+| `creds <name>` | Re-push credentials |
+| `url <name> <port>` | Public URL for a port |
+| `ls`, `pause <name>`, `down <name>` | Lifecycle |
+| `image build` | Build the provider's base image |
 
-## Roadmap
+`up` uses the repo's snapshot when one exists: a `git worktree add` from the baked mirror, so branches come up in seconds. Without one it falls back to a shallow partial clone. `--full` forces a full clone.
 
-- Prebuilt template (repo cloned, `yarn install` done, Postgres/Redis/Doppler/gh/pi preinstalled), based on `apps/flux/e2b-templates/self-improvement/e2b.Dockerfile` in escher
-- Interactive shell (PTY), file pull/push, git fetch of sandbox branches locally
-- Scoped, short-lived Doppler service tokens instead of copying secrets from the local login
-- Agent-facing skill so pi/Claude/Codex know how to use `l2b`
-- Auto-pause on idle, TTL reaping
+## Credentials
+
+Nothing secret is ever baked into an image or snapshot. At call time, `l2b` resolves a GitHub token (`GH_TOKEN`, or `gh auth token`) plus any configured secret sources locally, and writes them to the sandbox's tmpfs (`/dev/shm/l2b.env`, mode 600), which every `exec` sources. Snapshots are filesystem-only and the file is removed before snapshotting. A paused sandbox still holds its memory, so treat it as holding secrets.
+
+Secret sources (`secrets` in config, or `--doppler project/config`): `doppler`, or `env` (a list of local env var names). Provider API keys use the same mechanism via a value reference, e.g. `{ "from": "doppler", ... }` or `{ "from": "env", "name": "E2B_API_KEY" }`.
+
+## Config
+
+`$L2B_CONFIG`, else `$XDG_CONFIG_HOME/l2b/config.json` (default `~/.config/l2b/config.json`). See `config.example.json`. Every field has a default, so a missing file works if `E2B_API_KEY` is set.
+
+## Adding a provider
+
+Implement `Provider` and `Box` from `src/providers/types.ts`, register it in `src/providers/index.ts`, and add its config block to `src/config.ts`. Commands only talk to those interfaces; the e2b implementation in `src/providers/e2b/` is the reference.
+
+## Development
+
+    bun run typecheck
+    bun test
+
+The git scripts and credential file are tested against real local git repos and a real shell.
+
+## License
+
+MIT
