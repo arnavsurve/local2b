@@ -9,30 +9,42 @@ export function globalInstallCommands({ npmGlobals }: { npmGlobals: string[] }) 
   return npmGlobals.map((pkg) => `npm install -g --allow-scripts=${pkg} ${pkg}`);
 }
 
+const BASE_APT_PACKAGES = [
+  'git',
+  'curl',
+  'jq',
+  'sudo',
+  'ca-certificates',
+  'gnupg',
+  'build-essential',
+  'python3',
+  'python3-setuptools',
+  'postgresql',
+  'postgresql-16-pgvector',
+  'redis-server',
+  'ripgrep',
+  'tmux',
+];
+
+export function aptPackageList({ extra }: { extra: string[] }) {
+  return [...new Set([...BASE_APT_PACKAGES, ...extra])];
+}
+
 /**
  * Tooling-only image. It holds no repo and no credentials, so it is safe to
  * build once and share. Repo data is layered on afterwards by `l2b bake`.
  */
-export function devTemplate({ npmGlobals }: { npmGlobals: string[] }) {
+export function devTemplate({
+  npmGlobals,
+  aptPackages,
+}: {
+  npmGlobals: string[];
+  aptPackages: string[];
+}) {
   return Template()
     .fromUbuntuImage('24.04')
     .setUser('root')
-    .aptInstall([
-      'git',
-      'curl',
-      'jq',
-      'sudo',
-      'ca-certificates',
-      'gnupg',
-      'build-essential',
-      'python3',
-      'python3-setuptools',
-      'postgresql',
-      'postgresql-16-pgvector',
-      'redis-server',
-      'ripgrep',
-      'tmux',
-    ])
+    .aptInstall(aptPackageList({ extra: aptPackages }))
     .runCmd([
       'curl -fsSL https://deb.nodesource.com/setup_24.x | bash -',
       'apt-get install -y nodejs',

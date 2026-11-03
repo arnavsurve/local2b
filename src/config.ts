@@ -8,6 +8,8 @@ const e2bConfigSchema = z.object({
   cpuCount: z.number().int().positive().default(4),
   memoryMB: z.number().int().positive().default(8192),
   npmGlobals: z.array(z.string()).default([]),
+  /** Extra apt packages baked into the base image, e.g. a toolchain a repo's build tooling shells out to. */
+  aptPackages: z.array(z.string()).default([]),
 });
 
 const idleSchema = z.object({
