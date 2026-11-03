@@ -1,0 +1,9 @@
+{
+  "name": "local2b",
+  "private": true,
+  "type": "module",
+  "bin": { "l2b": "src/cli.ts" },
+  "scripts": { "typecheck": "tsc --noEmit" },
+  "dependencies": { "e2b": "^2.62.1" },
+  "devDependencies": { "@types/bun": "^1.4.4", "typescript": "^5" }
+}
