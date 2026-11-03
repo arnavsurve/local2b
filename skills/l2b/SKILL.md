@@ -13,7 +13,21 @@ When the task is a typecheck, a test suite, an install, a build, or a dev server
 
 To test uncommitted local changes, commit and push a branch first, then `up` with that branch.
 
-## Workflow
+## One-off work: `l2b run`
+
+For "run the tests / typecheck / build and tell me the result", use one call:
+
+    l2b run --repo <owner/repo> --branch <branch> -- <command...>
+
+It creates a box, checks out the branch (dependencies installed), runs the command in the checkout, then destroys the box, even if the command fails or you interrupt it. The command's output streams back and its exit code is returned, so a non-zero exit means the command failed. Progress lines go to stderr. Expect about a minute of setup before the command starts.
+
+- Use `-- bash -c '...'` for pipes, `&&` and redirects.
+- Pass the trunk branch name the repo really uses; if unsure, check with `git ls-remote --heads origin`.
+- Add `--keep` to leave the box up for follow-ups (it prints the box name).
+
+## Multi-step sessions: `up`, `exec`, `down`
+
+Use these when you need several commands against the same checkout (debugging, editing, a dev server).
 
     l2b up <name> --repo <owner/repo> --branch <branch>   # about a minute; progress prints to stderr
     l2b exec <name> -- <cmd...>                            # runs in the repo checkout by default
@@ -21,11 +35,10 @@ To test uncommitted local changes, commit and push a branch first, then `up` wit
     l2b ls                                                 # what is running
     l2b down <name>                                        # stop early
 
-- Pick a short unique `<name>`, e.g. the task slug. Names are unique among live boxes; if one exists, `exec` into it instead of creating another.
-- `up` takes up to a couple of minutes: give the command a generous timeout, or run it in the background and wait for it. Do not run it twice.
+- Pick a short unique `<name>`, e.g. the task slug. If one exists, `exec` into it instead of creating another.
+- `up` takes up to a couple of minutes: give the command a generous timeout, or run it in the background. Do not run it twice.
 - A `--branch` that does not exist on the remote is created from the default branch.
-- The repo is checked out at `/home/user/<repo>` with dependencies installed. `exec` runs there unless you pass `--cwd`.
-- `exec` streams output and returns the remote command's exit code. Put the command after `--`; use `-- bash -c '...'` for pipes and `&&`.
+- The repo is checked out at `/home/user/<repo>`; `exec` runs there unless you pass `--cwd`.
 
 ## Getting your work out
 
@@ -37,7 +50,7 @@ Anything not pushed is lost when the box expires. Do not try to sync files back 
 
 ## Cleanup is automatic
 
-Boxes expire on their own after a period with no `l2b` activity (default 15 minutes), and every `exec` or `shell` holds that off while it runs. You do not need to remember to shut them down. Run `l2b down <name>` when you are finished to stop early and save cost. Background processes (dev servers) only survive while the box is alive: a box with no `l2b` calls against it will eventually expire, so call `l2b exec <name> -- true` to extend it.
+`run` always cleans up after itself. Other boxes expire on their own after a period with no `l2b` activity (default 15 minutes), and every `exec` or `shell` holds that off while it runs. You do not need to remember to shut them down. Run `l2b down <name>` when you are finished to stop early and save cost. Background processes (dev servers) only survive while the box is alive: a box with no `l2b` calls against it will eventually expire, so call `l2b exec <name> -- true` to extend it.
 
 ## Secrets
 

@@ -6,7 +6,7 @@ import type { Command } from '../context';
 import { step } from '../progress';
 import { configureGit, pushCreds, runChecked, scrubCreds } from '../session';
 import { HOME } from '../shell';
-import { resolveImage, secretSources } from './shared';
+import { resolveImage, secretSourcesFor } from '../sources';
 
 /**
  * Builds the per-repo snapshot: a bare partial mirror plus a checkout with
@@ -42,7 +42,7 @@ export const bake: Command = async ({ ctx, args }) => {
   });
   await pushCreds({
     box,
-    sources: secretSources({ ctx, doppler: values.doppler ?? null }),
+    sources: secretSourcesFor({ ctx, doppler: values.doppler ?? null }),
   });
   await configureGit({ box });
   step('cloning the mirror and installing dependencies (several minutes)');

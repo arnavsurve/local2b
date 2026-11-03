@@ -1,7 +1,7 @@
-import type { Context } from '../context';
-import { parseDopplerTarget, type SecretSource } from '../secrets';
+import type { Context } from './context';
+import { parseDopplerTarget, type SecretSource } from './secrets';
 
-export function secretSources({
+export function secretSourcesFor({
   ctx,
   doppler,
 }: {

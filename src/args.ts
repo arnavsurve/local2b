@@ -1,3 +1,5 @@
+import { shellQuote } from './shell';
+
 export function requirePositional({
   positionals,
   index,
@@ -17,4 +19,8 @@ export function splitOnDoubleDash(args: string[]) {
   const sep = args.indexOf('--');
   if (sep === -1) return { head: args, tail: [] };
   return { head: args.slice(0, sep), tail: args.slice(sep + 1) };
+}
+
+export function joinCommand(parts: string[]) {
+  return parts.map(shellQuote).join(' ');
 }

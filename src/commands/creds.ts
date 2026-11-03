@@ -2,7 +2,7 @@ import { parseArgs } from 'node:util';
 import { requirePositional } from '../args';
 import type { Command } from '../context';
 import { pushCreds } from '../session';
-import { secretSources } from './shared';
+import { secretSourcesFor } from '../sources';
 
 export const creds: Command = async ({ ctx, args }) => {
   const { values, positionals } = parseArgs({
@@ -13,7 +13,7 @@ export const creds: Command = async ({ ctx, args }) => {
   const name = requirePositional({ positionals, index: 0, usage: 'l2b creds <name>' });
   await pushCreds({
     box: await ctx.provider.connect({ name }),
-    sources: secretSources({ ctx, doppler: values.doppler ?? null }),
+    sources: secretSourcesFor({ ctx, doppler: values.doppler ?? null }),
   });
   console.log('credentials refreshed');
 };

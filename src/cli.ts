@@ -5,6 +5,7 @@ import { exec } from './commands/exec';
 import { down, pause } from './commands/lifecycle';
 import { image } from './commands/image';
 import { ls } from './commands/ls';
+import { run } from './commands/run';
 import { shell } from './commands/shell';
 import { install } from './commands/install';
 import { up } from './commands/up';
@@ -14,6 +15,7 @@ import { CommandFailedError } from './session';
 
 const USAGE = `l2b - remote dev sandboxes on e2b
 
+  l2b run [--repo o/r] [--branch b] [--keep] -- <cmd...>  one-shot: box up, run, box destroyed (exit code passes through)
   l2b up <name> [--repo owner/repo] [--branch b] [--full] [--doppler project/config] [--image ref]
   l2b bake <owner/repo>                        build the per-repo snapshot (bare mirror + warm install)
   l2b exec <name> [--cwd dir] -- <cmd...>      run a command (default cwd: the repo checkout)
@@ -28,6 +30,7 @@ const USAGE = `l2b - remote dev sandboxes on e2b
 `;
 
 const commands: Record<string, Command> = {
+  run,
   up,
   image,
   bake,

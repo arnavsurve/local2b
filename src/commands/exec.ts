@@ -1,8 +1,7 @@
 import { parseArgs } from 'node:util';
-import { requirePositional, splitOnDoubleDash } from '../args';
+import { joinCommand, requirePositional, splitOnDoubleDash } from '../args';
 import type { Command } from '../context';
 import { run } from '../session';
-import { shellQuote } from '../shell';
 
 const USAGE = 'l2b exec <name> [--cwd dir] -- <cmd...>  (default cwd: the repo checkout)';
 
@@ -20,7 +19,7 @@ export const exec: Command = async ({ ctx, args }) => {
   const exitCode = await run({
     box,
     cwd: values.cwd ?? box.workdir,
-    cmd: tail.map(shellQuote).join(' '),
+    cmd: joinCommand(tail),
   });
   process.exitCode = exitCode;
 };
