@@ -13,13 +13,14 @@ import {
 import {
   dopplerSecrets,
   githubToken,
+  resolveE2bKey,
   parseDopplerTarget,
   toEnvFile,
 } from './creds';
 
 const USAGE = `l2b - remote dev sandboxes on e2b
 
-  l2b up <name> [--repo owner/repo] [--branch b] [--doppler project/config] [--template t]
+  l2b up <name> [--repo owner/repo] [--branch b] [--full] [--doppler project/config] [--template t]
   l2b exec <name> [--cwd dir] -- <cmd...>     run a command (secrets sourced)
   l2b creds <name> [--doppler project/config] refresh GH token + doppler secrets
   l2b url <name> <port>                       public URL for a port
@@ -73,6 +74,7 @@ async function run({
 }
 
 async function main() {
+  if (command && command !== 'help') process.env.E2B_API_KEY = await resolveE2bKey();
   switch (command) {
     case 'up': {
       const { values, positionals } = parseArgs({
@@ -81,6 +83,7 @@ async function main() {
         options: {
           repo: { type: 'string' },
           branch: { type: 'string' },
+          full: { type: 'boolean', default: false },
           doppler: { type: 'string' },
           template: { type: 'string', default: DEFAULT_TEMPLATE },
         },
@@ -97,10 +100,11 @@ async function main() {
       if (values.repo) {
         const dir = values.repo.split('/').pop();
         const branchFlag = values.branch ? `-b ${shellQuote(values.branch)}` : '';
+        const depthFlags = values.full ? '' : '--depth=1 --filter=blob:limit=50m';
         const code = await run({
           sandbox,
           cwd: HOME,
-          cmd: `git clone ${branchFlag} https://github.com/${values.repo}.git ${dir}`,
+          cmd: `git clone --quiet ${depthFlags} ${branchFlag} https://github.com/${values.repo}.git ${dir}`,
         });
         if (code !== 0) process.exit(code);
       }

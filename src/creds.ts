@@ -47,3 +47,22 @@ export function toEnvFile(vars: Record<string, string>) {
     .join('\n')
     .concat('\n');
 }
+
+const DEFAULT_E2B_KEY_SOURCE = 'shared-credentials/dev';
+
+/**
+ * Ambient E2B_API_KEY is deliberately ignored: shells often carry a stale or
+ * wrong-team key. Override explicitly with L2B_E2B_API_KEY, or point at a
+ * different Doppler source with L2B_E2B_DOPPLER=<project>/<config>.
+ */
+export async function resolveE2bKey() {
+  const explicit = process.env.L2B_E2B_API_KEY;
+  if (explicit) return explicit;
+  const target = parseDopplerTarget(
+    process.env.L2B_E2B_DOPPLER ?? DEFAULT_E2B_KEY_SOURCE
+  );
+  const secrets = await dopplerSecrets(target);
+  const key = secrets.E2B_API_KEY;
+  if (!key) throw new Error(`E2B_API_KEY missing in ${target.project}/${target.config}`);
+  return key;
+}
