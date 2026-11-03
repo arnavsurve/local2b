@@ -33,7 +33,12 @@ export const configSchema = z.object({
     .record(
       z.string(),
       z.object({
+        /** Branch the snapshot is baked from (the one you mostly work off), when it is not the repo's default branch. */
+        baseBranch: z.string().nullable().default(null),
+        /** Runs in the checkout on every `up`; keep it fast and incremental. */
         install: z.string().nullable().default(null),
+        /** Extra one-time work at bake only (codegen, builds); its output ships in the snapshot. */
+        warm: z.string().nullable().default(null),
         /** Plain variables set in every box for this repo, e.g. to switch off a wrapper that expects a local login. */
         env: z.record(z.string(), z.string()).default({}),
       })

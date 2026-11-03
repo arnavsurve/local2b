@@ -12,22 +12,30 @@ export function bakeScript({
   mirror,
   checkout,
   install,
+  warm,
+  branch,
   depth,
 }: {
   repo: string;
   mirror: string;
   checkout: string;
   install: string | null;
+  warm: string | null;
+  branch: string | null;
   depth: number;
 }) {
-  const installStep = install ? [`cd ${shellQuote(checkout)} && ${install}`] : [];
+  const branchFlag = branch ? `--branch ${shellQuote(branch)}` : '';
+  const prepare = [install, warm].filter((cmd) => cmd !== null);
+  const prepareStep = prepare.length
+    ? [`cd ${shellQuote(checkout)} && ${prepare.join(' && ')}`]
+    : [];
   return [
     'set -e',
     `mkdir -p ${shellQuote(parentDir(mirror))}`,
-    `git clone --quiet --bare --depth=${depth} ${PARTIAL_CLONE_FILTER} https://github.com/${repo}.git ${shellQuote(mirror)}`,
+    `git clone --quiet --bare --depth=${depth} ${PARTIAL_CLONE_FILTER} ${branchFlag} https://github.com/${repo}.git ${shellQuote(mirror)}`,
     `git -C ${shellQuote(mirror)} config remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*'`,
     `git -C ${shellQuote(mirror)} worktree add --quiet --detach ${shellQuote(checkout)} HEAD`,
-    ...installStep,
+    ...prepareStep,
   ].join('\n');
 }
 

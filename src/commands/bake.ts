@@ -22,6 +22,8 @@ export const bake: Command = async ({ ctx, args }) => {
       doppler: { type: 'string' },
       image: { type: 'string' },
       install: { type: 'string' },
+      warm: { type: 'string' },
+      branch: { type: 'string' },
     },
   });
   const repo = requirePositional({
@@ -56,6 +58,8 @@ export const bake: Command = async ({ ctx, args }) => {
       mirror: mirrorDir(repo),
       checkout: checkoutDir(repo),
       install: values.install ?? ctx.config.repos[repo]?.install ?? null,
+      warm: values.warm ?? ctx.config.repos[repo]?.warm ?? null,
+      branch: values.branch ?? ctx.config.repos[repo]?.baseBranch ?? null,
       depth: ctx.config.cloneDepth,
     }),
   });

@@ -102,10 +102,18 @@ test('a shallow mirror stays shallow but still switches to branches', async () =
   expect(Number(commits)).toBeLessThanOrEqual(4);
 });
 
-test('bake script only runs an install step when one is configured', () => {
+test('bake script clones the base branch and chains install then warm-up', () => {
   const base = { repo: 'o/r', mirror: '/m/r.git', checkout: '/seed', depth: 50 };
-  expect(bakeScript({ ...base, install: null })).not.toContain('/seed &&');
-  expect(bakeScript({ ...base, install: 'yarn install' })).toContain(
-    "cd '/seed' && yarn install"
-  );
+  const none = bakeScript({ ...base, install: null, warm: null, branch: null });
+  expect(none).not.toContain('/seed &&');
+  expect(none).not.toContain('--branch');
+
+  const full = bakeScript({
+    ...base,
+    install: 'yarn install',
+    warm: 'yarn gen',
+    branch: 'trunk',
+  });
+  expect(full).toContain("--branch 'trunk'");
+  expect(full).toContain("cd '/seed' && yarn install && yarn gen");
 });
