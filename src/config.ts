@@ -30,7 +30,11 @@ export const configSchema = z.object({
   repos: z
     .record(
       z.string(),
-      z.object({ install: z.string().nullable().default(null) })
+      z.object({
+        install: z.string().nullable().default(null),
+        /** Plain variables set in every box for this repo, e.g. to switch off a wrapper that expects a local login. */
+        env: z.record(z.string(), z.string()).default({}),
+      })
     )
     .default({}),
   e2b: e2bConfigSchema.default(e2bConfigSchema.parse({})),

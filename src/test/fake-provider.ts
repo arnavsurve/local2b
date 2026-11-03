@@ -15,6 +15,7 @@ export function fakeContext({
 }) {
   const alive = new Set<string>();
   const executed: string[] = [];
+  const files = new Map<string, string>();
 
   const provider: Provider = {
     id: 'fake',
@@ -32,7 +33,9 @@ export function fakeContext({
         async shell() {
           throw new Error('not used');
         },
-        async writeFile() {},
+        async writeFile({ path, content }) {
+          files.set(path, content);
+        },
         publicUrl: ({ port }) => `https://fake:${port}`,
         pause: async () => {},
         destroy: async () => {
@@ -52,5 +55,5 @@ export function fakeContext({
   };
 
   const ctx: Context = { config: configSchema.parse({}), provider };
-  return { ctx, alive, executed };
+  return { ctx, alive, executed, files };
 }

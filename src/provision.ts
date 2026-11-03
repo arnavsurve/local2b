@@ -7,7 +7,7 @@ import {
 import { step } from './progress';
 import type { Box } from './providers/types';
 import { checkoutDir, mirrorDir, snapshotName } from './repo';
-import { configureGit, pushCreds, runChecked } from './session';
+import { configureGit, pushCreds, pushEnv, runChecked } from './session';
 import { HOME } from './shell';
 import { secretSourcesFor, resolveImage } from './sources';
 
@@ -97,6 +97,7 @@ export async function provisionBox({
       box,
       sources: secretSourcesFor({ ctx, doppler: opts.doppler }),
     });
+    await pushEnv({ box, env: repo ? (ctx.config.repos[repo]?.env ?? {}) : {} });
     await configureGit({ box });
     if (repo && snapshotId) {
       await checkoutFromSnapshot({

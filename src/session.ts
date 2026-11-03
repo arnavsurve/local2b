@@ -7,6 +7,7 @@ import {
 } from './secrets';
 
 export const ENV_FILE = '/dev/shm/l2b.env';
+export const PLAIN_ENV_FILE = '/home/user/.l2b-env';
 
 const CREDENTIAL_HELPER = `git config --global credential.helper '!f() { echo username=x-access-token; echo password=$GH_TOKEN; }; f'`;
 
@@ -19,8 +20,9 @@ export class CommandFailedError extends Error {
   }
 }
 
+/** Plain env is sourced first so a secret of the same name wins. */
 export function withEnv(cmd: string) {
-  return `[ -f ${ENV_FILE} ] && . ${ENV_FILE}; ${cmd}`;
+  return `for f in ${PLAIN_ENV_FILE} ${ENV_FILE}; do [ -f $f ] && . $f; done; ${cmd}`;
 }
 
 /**
@@ -34,14 +36,29 @@ export async function pushCreds({
   box: Box;
   sources: SecretSource[];
 }) {
-  const vars: Record<string, string> = { GH_TOKEN: await githubToken() };
+  const vars: Record<string, string> = {};
   for (const source of sources) Object.assign(vars, await loadSecrets(source));
+  vars.GH_TOKEN = await githubToken();
   await box.writeFile({ path: ENV_FILE, content: toEnvFile(vars) });
   await box.exec({
     cmd: `chmod 600 ${ENV_FILE}`,
     cwd: '/',
     onOutput: () => {},
   });
+}
+
+/**
+ * Plain (non-secret) variables live on disk so they survive `creds` refreshes,
+ * which only rewrite the tmpfs secrets file.
+ */
+export async function pushEnv({
+  box,
+  env,
+}: {
+  box: Box;
+  env: Record<string, string>;
+}) {
+  await box.writeFile({ path: PLAIN_ENV_FILE, content: toEnvFile(env) });
 }
 
 export async function configureGit({ box }: { box: Box }) {

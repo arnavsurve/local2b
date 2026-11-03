@@ -4,7 +4,7 @@ import { bakeScript } from '../git-scripts';
 import { checkoutDir, mirrorDir, repoName, snapshotName } from '../repo';
 import type { Command } from '../context';
 import { step } from '../progress';
-import { configureGit, pushCreds, runChecked, scrubCreds } from '../session';
+import { configureGit, pushCreds, pushEnv, runChecked, scrubCreds } from '../session';
 import { HOME } from '../shell';
 import { resolveImage, secretSourcesFor } from '../sources';
 
@@ -44,6 +44,7 @@ export const bake: Command = async ({ ctx, args }) => {
     box,
     sources: secretSourcesFor({ ctx, doppler: values.doppler ?? null }),
   });
+  await pushEnv({ box, env: ctx.config.repos[repo]?.env ?? {} });
   await configureGit({ box });
   step('cloning the mirror and installing dependencies (several minutes)');
   await runChecked({

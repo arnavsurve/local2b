@@ -1,8 +1,7 @@
 import { parseArgs } from 'node:util';
 import { requirePositional } from '../args';
 import type { Command } from '../context';
-import { ENV_FILE } from '../session';
-import { shellQuote } from '../shell';
+import { withEnv } from '../session';
 
 /** Interactive terminal in the box. Needs a real TTY on both stdin and stdout. */
 export const shell: Command = async ({ ctx, args }) => {
@@ -42,7 +41,7 @@ export const shell: Command = async ({ ctx, args }) => {
   });
   process.stdin.resume();
 
-  const loadEnv = `[ -f ${shellQuote(ENV_FILE)} ] && . ${shellQuote(ENV_FILE)}; clear\n`;
+  const loadEnv = `${withEnv('clear')}\n`;
   await session.sendInput(new TextEncoder().encode(loadEnv));
 
   try {
