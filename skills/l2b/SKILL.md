@@ -19,7 +19,7 @@ For "run the tests / typecheck / build and tell me the result", use one call:
 
     l2b run --repo <owner/repo> --branch <branch> -- <command...>
 
-It creates a box, checks out the branch (dependencies installed), runs the command in the checkout, then destroys the box, even if the command fails or you interrupt it. The command's output streams back and its exit code is returned, so a non-zero exit means the command failed. Progress lines go to stderr. Expect about a minute of setup before the command starts.
+It creates a box, checks out the branch (dependencies installed), runs the command in the checkout, then destroys the box, even if the command fails or you interrupt it. The command's output streams back and its exit code is returned, so a non-zero exit means the command failed. The last stderr lines say `command exited <code>`, so the result is clear even if you pipe the output. Do not pipe `run` into `tail` and then trust `$?` (it reports `tail`'s status); read that line, or use `set -o pipefail`. Progress lines go to stderr. Expect about a minute of setup before the command starts.
 
 - Use `-- bash -c '...'` for pipes, `&&` and redirects.
 - Pass the trunk branch name the repo really uses; if unsure, check with `git ls-remote --heads origin`.

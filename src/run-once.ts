@@ -43,7 +43,9 @@ export async function runOnce({
 
   try {
     step(`running: ${label}`);
-    return await run({ box, cmd, cwd: box.workdir });
+    const exitCode = await run({ box, cmd, cwd: box.workdir });
+    step(`command exited ${exitCode}`);
+    return exitCode;
   } finally {
     process.off('SIGINT', onSignal);
     process.off('SIGTERM', onSignal);
