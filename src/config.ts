@@ -10,6 +10,8 @@ const e2bConfigSchema = z.object({
   npmGlobals: z.array(z.string()).default([]),
   /** Extra apt packages baked into the base image, e.g. a toolchain a repo's build tooling shells out to. */
   aptPackages: z.array(z.string()).default([]),
+  /** Shell commands run as the box user at image build, after the system packages (sudo is available), e.g. to install a toolchain. */
+  imageCommands: z.array(z.string()).default([]),
 });
 
 const idleSchema = z.object({

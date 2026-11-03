@@ -37,9 +37,11 @@ export function aptPackageList({ extra }: { extra: string[] }) {
 export function devTemplate({
   npmGlobals,
   aptPackages,
+  imageCommands,
 }: {
   npmGlobals: string[];
   aptPackages: string[];
+  imageCommands: string[];
 }) {
   return Template()
     .fromUbuntuImage('24.04')
@@ -61,5 +63,6 @@ export function devTemplate({
       'rm -rf /var/lib/apt/lists/*',
     ])
     .setUser('user')
-    .setWorkdir('/home/user');
+    .setWorkdir('/home/user')
+    .runCmd(imageCommands.length ? imageCommands : ['true']);
 }
