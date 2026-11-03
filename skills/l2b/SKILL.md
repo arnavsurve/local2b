@@ -1,6 +1,6 @@
 ---
 name: l2b
-description: Run heavy dev work (installs, typechecks, test suites, dev servers, long agent tasks) on a remote sandbox instead of the local machine. Use when a task needs lots of CPU, RAM, or disk, when you want a clean isolated checkout of a repo, or when the user mentions l2b, remote sandboxes, or offloading work.
+description: Offload heavy dev work to a remote sandbox instead of this machine. Reach for it by default when a task in a large repo needs a full typecheck or lint, the full or integration test suite, a fresh dependency install, a dev server or browser QA run, a new worktree or clean checkout, or anything long-running or parallel that would hog local CPU, RAM, or disk. Skip it for reading code, small edits, and quick commands.
 ---
 
 # l2b: remote dev sandboxes
