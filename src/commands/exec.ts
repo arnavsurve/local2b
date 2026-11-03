@@ -2,16 +2,16 @@ import { parseArgs } from 'node:util';
 import { requirePositional, splitOnDoubleDash } from '../args';
 import type { Command } from '../context';
 import { run } from '../session';
-import { HOME, shellQuote } from '../shell';
+import { shellQuote } from '../shell';
 
-const USAGE = 'l2b exec <name> [--cwd dir] -- <cmd...>';
+const USAGE = 'l2b exec <name> [--cwd dir] -- <cmd...>  (default cwd: the repo checkout)';
 
 export const exec: Command = async ({ ctx, args }) => {
   const { head, tail } = splitOnDoubleDash(args);
   const { values, positionals } = parseArgs({
     args: head,
     allowPositionals: true,
-    options: { cwd: { type: 'string', default: HOME } },
+    options: { cwd: { type: 'string' } },
   });
   const name = requirePositional({ positionals, index: 0, usage: USAGE });
   if (tail.length === 0) throw new Error(`usage: ${USAGE}`);
@@ -19,7 +19,7 @@ export const exec: Command = async ({ ctx, args }) => {
   const box = await ctx.provider.connect({ name });
   const exitCode = await run({
     box,
-    cwd: values.cwd,
+    cwd: values.cwd ?? box.workdir,
     cmd: tail.map(shellQuote).join(' '),
   });
   process.exitCode = exitCode;

@@ -11,11 +11,11 @@ Providers are pluggable; [e2b](https://e2b.dev) is the first one.
     bun src/cli.ts image build                          # once: build the base image
     bun src/cli.ts bake my-org/my-repo                  # once per repo: mirror + warm install
     bun src/cli.ts up task1 --repo my-org/my-repo --branch feature/x
-    bun src/cli.ts exec task1 --cwd /home/user/work/feature-x -- yarn test
+    bun src/cli.ts exec task1 -- yarn test
     bun src/cli.ts url task1 3000
     bun src/cli.ts down task1
 
-Link `src/cli.ts` onto your PATH as `l2b` for convenience. Requires [Bun](https://bun.sh), and `gh` for GitHub auth (or `GH_TOKEN`). Doppler is optional.
+Run `bun src/cli.ts install` to put `l2b` on your PATH (`~/.local/bin`) and link the agent skill into `~/.agents/skills` and `~/.claude/skills`. Requires [Bun](https://bun.sh), and `gh` for GitHub auth (or `GH_TOKEN`). Doppler is optional.
 
 ## Commands
 
@@ -23,7 +23,9 @@ Link `src/cli.ts` onto your PATH as `l2b` for convenience. Requires [Bun](https:
 | --- | --- |
 | `up <name> [--repo o/r] [--branch b] [--full] [--doppler p/c] [--image ref]` | Create a sandbox, push credentials, check out a branch |
 | `bake <o/r> [--install cmd]` | Build a per-repo snapshot: bare partial mirror plus a warm install |
-| `exec <name> [--cwd dir] -- <cmd...>` | Run a command with secrets in its environment |
+| `exec <name> [--cwd dir] -- <cmd...>` | Run a command with secrets in its environment; defaults to the repo checkout |
+| `shell <name>` | Interactive terminal (needs a TTY) |
+| `install` | Put `l2b` on PATH and link the agent skill |
 | `creds <name>` | Re-push credentials |
 | `url <name> <port>` | Public URL for a port |
 | `ls`, `pause <name>`, `down <name>` | Lifecycle |

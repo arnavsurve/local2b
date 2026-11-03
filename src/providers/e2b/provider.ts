@@ -6,12 +6,22 @@ import { resolveValue } from '../../secrets';
 import { devTemplate } from './template';
 
 const NAME_KEY = 'l2b';
+const WORKDIR_KEY = 'l2b_workdir';
+const FALLBACK_WORKDIR = '/home/user';
 const HEARTBEATS_PER_IDLE_WINDOW = 3;
 const BUILD_REQUEST_TIMEOUT_MS = 30 * 60 * 1000;
 const IMAGE_NAME = 'l2b-dev';
 const LIVE_STATES: ('running' | 'paused')[] = ['running', 'paused'];
 
-function wrapBox({ sandbox, idle }: { sandbox: Sandbox; idle: IdlePolicy }): Box {
+function wrapBox({
+  sandbox,
+  idle,
+  workdir,
+}: {
+  sandbox: Sandbox;
+  idle: IdlePolicy;
+  workdir: string;
+}): Box {
   const keepAlive = () => sandbox.setTimeout(idle.ms);
   const held = <T>(task: () => Promise<T>) =>
     withHeartbeat({
@@ -22,6 +32,7 @@ function wrapBox({ sandbox, idle }: { sandbox: Sandbox; idle: IdlePolicy }): Box
 
   return {
     id: sandbox.sandboxId,
+    workdir,
     exec: ({ cmd, cwd, onOutput }) =>
       held(async () => {
         try {
@@ -96,15 +107,19 @@ export function createE2bProvider({
     id: 'e2b',
     defaultImage: IMAGE_NAME,
 
-    async create({ name, image }) {
-      if (await findInfo({ name })) throw new Error(`sandbox "${name}" already exists`);
+    async create({ name, image, workdir }) {
+      if (await findInfo({ name })) {
+        throw new Error(
+          `sandbox "${name}" already exists: reuse it with \`l2b exec ${name} -- <cmd>\`, or \`l2b down ${name}\` first`
+        );
+      }
       const sandbox = await Sandbox.create(image, {
         apiKey: await apiKey(),
         timeoutMs: idle.ms,
         lifecycle: { onTimeout: idle.action },
-        metadata: { [NAME_KEY]: name },
+        metadata: { [NAME_KEY]: name, [WORKDIR_KEY]: workdir },
       });
-      return wrapBox({ sandbox, idle });
+      return wrapBox({ sandbox, idle, workdir });
     },
 
     async connect({ name }) {
@@ -114,7 +129,11 @@ export function createE2bProvider({
         apiKey: await apiKey(),
         timeoutMs: idle.ms,
       });
-      return wrapBox({ sandbox, idle });
+      return wrapBox({
+        sandbox,
+        idle,
+        workdir: info.metadata[WORKDIR_KEY] ?? FALLBACK_WORKDIR,
+      });
     },
 
     async list() {

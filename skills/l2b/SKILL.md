@@ -9,21 +9,23 @@ description: Run heavy dev work (installs, typechecks, test suites, dev servers,
 
 ## Workflow
 
-    l2b up <name> --repo <owner/repo> --branch <branch>   # ready in under a minute
-    l2b exec <name> --cwd /home/user/<repo> -- <cmd...>   # run anything, output streams back
+    l2b up <name> --repo <owner/repo> --branch <branch>   # about a minute; progress prints to stderr
+    l2b exec <name> -- <cmd...>                            # runs in the repo checkout by default
     l2b url <name> <port>                                  # public URL for a dev server
     l2b ls                                                 # what is running
+    l2b down <name>                                        # stop early
 
-- Pick a short unique `<name>`, e.g. the branch or task slug. Names are unique among live boxes.
-- A new `--branch` that does not exist on the remote is created from the default branch.
-- The repo is checked out at `/home/user/<repo>` with dependencies already installed.
-- `exec` returns the remote command's exit code. Pass the command after `--`; quote shell syntax yourself, e.g. `-- bash -c 'yarn typecheck && yarn test'`.
+- Pick a short unique `<name>`, e.g. the task slug. Names are unique among live boxes; if one exists, `exec` into it instead of creating another.
+- `up` takes up to a couple of minutes: give the command a generous timeout, or run it in the background and wait for it. Do not run it twice.
+- A `--branch` that does not exist on the remote is created from the default branch.
+- The repo is checked out at `/home/user/<repo>` with dependencies installed. `exec` runs there unless you pass `--cwd`.
+- `exec` streams output and returns the remote command's exit code. Put the command after `--`; use `-- bash -c '...'` for pipes and `&&`.
 
 ## Getting your work out
 
 Boxes are disposable. Commit and push a branch from inside the box when you are done:
 
-    l2b exec <name> --cwd /home/user/<repo> -- git push -u origin <branch>
+    l2b exec <name> -- git push -u origin <branch>
 
 Anything not pushed is lost when the box expires. Do not try to sync files back to the local machine; clone the pushed branch if you need it locally.
 
@@ -38,6 +40,10 @@ Credentials (a GitHub token and any configured secrets) are written to the box's
 ## Interactive use
 
 `l2b shell <name>` opens a terminal, but needs a real TTY. Agents should use `exec`.
+
+## Not found?
+
+If `l2b` is not on the PATH, run `bun <path-to-local2b>/src/cli.ts install` once.
 
 ## Troubleshooting
 

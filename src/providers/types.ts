@@ -12,6 +12,8 @@ export type Shell = {
 /** A running sandbox. Everything the CLI needs from a provider goes through here. */
 export type Box = {
   id: string;
+  /** Directory commands run in when no `--cwd` is given. */
+  workdir: string;
   exec(opts: {
     cmd: string;
     cwd: string;
@@ -51,7 +53,7 @@ export type Provider = {
   id: string;
   /** Image used when the user does not pick one. */
   defaultImage: string;
-  create(opts: { name: string; image: string }): Promise<Box>;
+  create(opts: { name: string; image: string; workdir: string }): Promise<Box>;
   connect(opts: { name: string }): Promise<Box>;
   list(): Promise<BoxSummary[]>;
   exists(opts: { name: string }): Promise<boolean>;

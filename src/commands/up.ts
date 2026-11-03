@@ -8,6 +8,7 @@ import {
 import { checkoutDir, mirrorDir, snapshotName } from '../repo';
 import type { Command } from '../context';
 import type { Box } from '../providers/types';
+import { step } from '../progress';
 import { configureGit, pushCreds, runChecked } from '../session';
 import { HOME } from '../shell';
 import { resolveImage, secretSources } from './shared';
@@ -26,6 +27,7 @@ async function checkoutFromSnapshot({
   depth: number;
 }) {
   const dir = checkoutDir(repo);
+  step(`checking out ${branch ?? 'the default branch'}`);
   await runChecked({
     box,
     cwd: HOME,
@@ -33,9 +35,9 @@ async function checkoutFromSnapshot({
     cmd: switchScript({ mirror: mirrorDir(repo), dir, branch, depth }),
   });
   if (install) {
+    step(`installing dependencies: ${install}`);
     await runChecked({ box, cwd: dir, what: 'install', cmd: install });
   }
-  return dir;
 }
 
 async function checkoutFromClone({
@@ -50,6 +52,7 @@ async function checkoutFromClone({
   full: boolean;
 }) {
   const dir = checkoutDir(repo);
+  step('no baked snapshot for this repo, cloning (slow; run `l2b bake` once to speed this up)');
   const clone = full ? fullCloneCommand : shallowCloneCommand;
   await runChecked({
     box,
@@ -57,7 +60,6 @@ async function checkoutFromClone({
     what: 'git clone',
     cmd: clone({ repo, dir, branch }),
   });
-  return dir;
 }
 
 export const up: Command = async ({ ctx, args }) => {
@@ -77,12 +79,16 @@ export const up: Command = async ({ ctx, args }) => {
   const repo = values.repo ?? null;
   const branch = values.branch ?? null;
 
+  step('looking for a baked snapshot');
   const snapshotId =
     repo && !values.full
       ? await ctx.provider.findSnapshot({ name: snapshotName(repo) })
       : null;
   const image = snapshotId ?? resolveImage({ ctx, override: values.image ?? null });
-  const box = await ctx.provider.create({ name, image });
+  const workdir = repo ? checkoutDir(repo) : HOME;
+  step(`creating box "${name}"`);
+  const box = await ctx.provider.create({ name, image, workdir });
+  step('pushing credentials');
   await pushCreds({
     box,
     sources: secretSources({ ctx, doppler: values.doppler ?? null }),
@@ -90,16 +96,26 @@ export const up: Command = async ({ ctx, args }) => {
   await configureGit({ box });
 
   if (repo) {
-    const dir = snapshotId
-      ? await checkoutFromSnapshot({
-          box,
-          repo,
-          branch,
-          install: values.install ?? ctx.config.repos[repo]?.install ?? null,
-          depth: ctx.config.cloneDepth,
-        })
-      : await checkoutFromClone({ box, repo, branch, full: values.full });
-    console.log(`checkout: ${dir}`);
+    if (snapshotId) {
+      await checkoutFromSnapshot({
+        box,
+        repo,
+        branch,
+        install: values.install ?? ctx.config.repos[repo]?.install ?? null,
+        depth: ctx.config.cloneDepth,
+      });
+    } else {
+      await checkoutFromClone({ box, repo, branch, full: values.full });
+    }
   }
-  console.log(`${name} ready (${box.id})`);
+
+  step('ready');
+  console.log(
+    [
+      `${name} ready`,
+      `workdir: ${box.workdir}`,
+      `run:     l2b exec ${name} -- <command>`,
+      `stop:    l2b down ${name}  (it also expires after ${ctx.config.idle.minutes} min idle)`,
+    ].join('\n')
+  );
 };

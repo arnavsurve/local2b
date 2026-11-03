@@ -2,14 +2,14 @@ import { parseArgs } from 'node:util';
 import { requirePositional } from '../args';
 import type { Command } from '../context';
 import { ENV_FILE } from '../session';
-import { HOME, shellQuote } from '../shell';
+import { shellQuote } from '../shell';
 
 /** Interactive terminal in the box. Needs a real TTY on both stdin and stdout. */
 export const shell: Command = async ({ ctx, args }) => {
   const { values, positionals } = parseArgs({
     args,
     allowPositionals: true,
-    options: { cwd: { type: 'string', default: HOME } },
+    options: { cwd: { type: 'string' } },
   });
   const name = requirePositional({
     positionals,
@@ -24,7 +24,7 @@ export const shell: Command = async ({ ctx, args }) => {
   const session = await box.shell({
     cols: process.stdout.columns,
     rows: process.stdout.rows,
-    cwd: values.cwd,
+    cwd: values.cwd ?? box.workdir,
     onData: (data) => {
       process.stdout.write(data);
     },

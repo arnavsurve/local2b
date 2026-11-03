@@ -3,6 +3,7 @@ import { requirePositional } from '../args';
 import { bakeScript } from '../git-scripts';
 import { checkoutDir, mirrorDir, repoName, snapshotName } from '../repo';
 import type { Command } from '../context';
+import { step } from '../progress';
 import { configureGit, pushCreds, runChecked, scrubCreds } from '../session';
 import { HOME } from '../shell';
 import { resolveImage, secretSources } from './shared';
@@ -33,15 +34,18 @@ export const bake: Command = async ({ ctx, args }) => {
     throw new Error(`stale bake sandbox "${bakeName}" exists; run: l2b down ${bakeName}`);
   }
 
+  step(`creating bake box "${bakeName}"`);
   const box = await ctx.provider.create({
     name: bakeName,
     image: resolveImage({ ctx, override: values.image ?? null }),
+    workdir: HOME,
   });
   await pushCreds({
     box,
     sources: secretSources({ ctx, doppler: values.doppler ?? null }),
   });
   await configureGit({ box });
+  step('cloning the mirror and installing dependencies (several minutes)');
   await runChecked({
     box,
     cwd: HOME,
@@ -55,6 +59,7 @@ export const bake: Command = async ({ ctx, args }) => {
     }),
   });
 
+  step('snapshotting');
   await scrubCreds({ box });
   const snapshotId = await box.snapshot({ name: snapshotName(repo) });
   await box.destroy();

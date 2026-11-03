@@ -6,7 +6,7 @@ import { down, pause } from './commands/lifecycle';
 import { image } from './commands/image';
 import { ls } from './commands/ls';
 import { shell } from './commands/shell';
-import { installSkill } from './commands/install-skill';
+import { install } from './commands/install';
 import { up } from './commands/up';
 import { url } from './commands/url';
 import { createContext, type Command } from './context';
@@ -16,10 +16,10 @@ const USAGE = `l2b - remote dev sandboxes on e2b
 
   l2b up <name> [--repo owner/repo] [--branch b] [--full] [--doppler project/config] [--image ref]
   l2b bake <owner/repo>                        build the per-repo snapshot (bare mirror + warm install)
-  l2b exec <name> [--cwd dir] -- <cmd...>      run a command (secrets sourced)
+  l2b exec <name> [--cwd dir] -- <cmd...>      run a command (default cwd: the repo checkout)
   l2b creds <name> [--doppler project/config]  refresh GH token + doppler secrets
   l2b shell <name> [--cwd dir]                 interactive terminal (needs a TTY)
-  l2b install-skill                            link the agent skill into ~/.agents/skills and ~/.claude/skills
+  l2b install                                  put l2b on PATH and link the agent skill
   l2b url <name> <port>                        public URL for a port
   l2b image build                              build the base image for the configured provider
   l2b ls
@@ -33,7 +33,7 @@ const commands: Record<string, Command> = {
   bake,
   exec,
   shell,
-  'install-skill': installSkill,
+  install,
   creds,
   url,
   ls,
