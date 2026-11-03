@@ -5,7 +5,10 @@ import type { Provider } from './types';
 export function createProvider({ config }: { config: Config }): Provider {
   switch (config.provider) {
     case 'e2b':
-      return createE2bProvider({ config: config.e2b });
+      return createE2bProvider({
+        config: config.e2b,
+        idle: { ms: config.idle.minutes * 60_000, action: config.idle.action },
+      });
     default: {
       const unreachable: never = config.provider;
       throw new Error(`unknown provider: ${unreachable}`);

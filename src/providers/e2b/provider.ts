@@ -1,33 +1,61 @@
 import { Sandbox, Template } from 'e2b';
-import type { Box, Provider } from '../types';
+import type { Box, IdlePolicy, Provider } from '../types';
+import { withHeartbeat } from '../../keepalive';
 import type { Config } from '../../config';
 import { resolveValue } from '../../secrets';
 import { devTemplate } from './template';
 
 const NAME_KEY = 'l2b';
-const TIMEOUT_MS = 60 * 60 * 1000;
+const HEARTBEATS_PER_IDLE_WINDOW = 3;
 const BUILD_REQUEST_TIMEOUT_MS = 30 * 60 * 1000;
 const IMAGE_NAME = 'l2b-dev';
 const LIVE_STATES: ('running' | 'paused')[] = ['running', 'paused'];
 
-function wrapBox({ sandbox }: { sandbox: Sandbox }): Box {
+function wrapBox({ sandbox, idle }: { sandbox: Sandbox; idle: IdlePolicy }): Box {
+  const keepAlive = () => sandbox.setTimeout(idle.ms);
+  const held = <T>(task: () => Promise<T>) =>
+    withHeartbeat({
+      intervalMs: idle.ms / HEARTBEATS_PER_IDLE_WINDOW,
+      beat: keepAlive,
+      task,
+    });
+
   return {
     id: sandbox.sandboxId,
-    async exec({ cmd, cwd, onOutput }) {
-      try {
-        const result = await sandbox.commands.run(cmd, {
-          cwd,
-          timeoutMs: 0,
-          onStdout: (data) => onOutput({ stream: 'stdout', data }),
-          onStderr: (data) => onOutput({ stream: 'stderr', data }),
-        });
-        return result.exitCode;
-      } catch (err) {
-        if (err instanceof Error && 'exitCode' in err && typeof err.exitCode === 'number') {
-          return err.exitCode;
+    exec: ({ cmd, cwd, onOutput }) =>
+      held(async () => {
+        try {
+          const result = await sandbox.commands.run(cmd, {
+            cwd,
+            timeoutMs: 0,
+            onStdout: (data) => onOutput({ stream: 'stdout', data }),
+            onStderr: (data) => onOutput({ stream: 'stderr', data }),
+          });
+          return result.exitCode;
+        } catch (err) {
+          if (err instanceof Error && 'exitCode' in err && typeof err.exitCode === 'number') {
+            return err.exitCode;
+          }
+          throw err;
         }
-        throw err;
-      }
+      }),
+    async shell({ cols, rows, cwd, onData }) {
+      const handle = await sandbox.pty.create({ cols, rows, cwd, onData, timeoutMs: 0 });
+      return {
+        sendInput: (data) => sandbox.pty.sendInput(handle.pid, data),
+        resize: (size) => sandbox.pty.resize(handle.pid, size),
+        wait: () =>
+          held(async () => {
+            try {
+              return (await handle.wait()).exitCode;
+            } catch (err) {
+              if (err instanceof Error && 'exitCode' in err && typeof err.exitCode === 'number') {
+                return err.exitCode;
+              }
+              throw err;
+            }
+          }),
+      };
     },
     async writeFile({ path, content }) {
       await sandbox.files.write(path, content);
@@ -46,7 +74,13 @@ function wrapBox({ sandbox }: { sandbox: Sandbox }): Box {
   };
 }
 
-export function createE2bProvider({ config }: { config: Config['e2b'] }): Provider {
+export function createE2bProvider({
+  config,
+  idle,
+}: {
+  config: Config['e2b'];
+  idle: IdlePolicy;
+}): Provider {
   const apiKey = () => resolveValue(config.apiKey);
 
   async function findInfo({ name }: { name: string }) {
@@ -66,10 +100,11 @@ export function createE2bProvider({ config }: { config: Config['e2b'] }): Provid
       if (await findInfo({ name })) throw new Error(`sandbox "${name}" already exists`);
       const sandbox = await Sandbox.create(image, {
         apiKey: await apiKey(),
-        timeoutMs: TIMEOUT_MS,
+        timeoutMs: idle.ms,
+        lifecycle: { onTimeout: idle.action },
         metadata: { [NAME_KEY]: name },
       });
-      return wrapBox({ sandbox });
+      return wrapBox({ sandbox, idle });
     },
 
     async connect({ name }) {
@@ -77,9 +112,9 @@ export function createE2bProvider({ config }: { config: Config['e2b'] }): Provid
       if (!info) throw new Error(`no sandbox named "${name}" (try: l2b ls)`);
       const sandbox = await Sandbox.connect(info.sandboxId, {
         apiKey: await apiKey(),
-        timeoutMs: TIMEOUT_MS,
+        timeoutMs: idle.ms,
       });
-      return wrapBox({ sandbox });
+      return wrapBox({ sandbox, idle });
     },
 
     async list() {

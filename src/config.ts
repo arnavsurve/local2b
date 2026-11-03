@@ -10,10 +10,20 @@ const e2bConfigSchema = z.object({
   npmGlobals: z.array(z.string()).default([]),
 });
 
+const idleSchema = z.object({
+  minutes: z.number().positive().default(15),
+  /** `kill` discards the box; `pause` keeps its disk and memory (and secrets) around. */
+  action: z.enum(['kill', 'pause']).default('kill'),
+});
+
 export const configSchema = z.object({
   provider: z.enum(['e2b']).default('e2b'),
   /** Overrides the provider's default base image. */
   image: z.string().nullable().default(null),
+  /** Boxes expire this long after the last l2b activity against them. */
+  idle: idleSchema.default(idleSchema.parse({})),
+  /** Commits of history kept in a baked mirror. */
+  cloneDepth: z.number().int().positive().default(50),
   /** Variables pushed into every sandbox, in addition to a GitHub token. */
   secrets: z.array(secretSourceSchema).default([]),
   /** Per-repo settings, keyed by `owner/name`. */

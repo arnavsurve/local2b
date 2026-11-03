@@ -17,18 +17,20 @@ async function checkoutFromSnapshot({
   repo,
   branch,
   install,
+  depth,
 }: {
   box: Box;
   repo: string;
   branch: string | null;
   install: string | null;
+  depth: number;
 }) {
   const dir = checkoutDir(repo);
   await runChecked({
     box,
     cwd: HOME,
     what: 'branch checkout',
-    cmd: switchScript({ mirror: mirrorDir(repo), dir, branch }),
+    cmd: switchScript({ mirror: mirrorDir(repo), dir, branch, depth }),
   });
   if (install) {
     await runChecked({ box, cwd: dir, what: 'install', cmd: install });
@@ -94,6 +96,7 @@ export const up: Command = async ({ ctx, args }) => {
           repo,
           branch,
           install: values.install ?? ctx.config.repos[repo]?.install ?? null,
+          depth: ctx.config.cloneDepth,
         })
       : await checkoutFromClone({ box, repo, branch, full: values.full });
     console.log(`checkout: ${dir}`);

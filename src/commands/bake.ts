@@ -51,6 +51,7 @@ export const bake: Command = async ({ ctx, args }) => {
       mirror: mirrorDir(repo),
       checkout: checkoutDir(repo),
       install: values.install ?? ctx.config.repos[repo]?.install ?? null,
+      depth: ctx.config.cloneDepth,
     }),
   });
 

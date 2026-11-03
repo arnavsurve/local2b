@@ -12,17 +12,19 @@ export function bakeScript({
   mirror,
   checkout,
   install,
+  depth,
 }: {
   repo: string;
   mirror: string;
   checkout: string;
   install: string | null;
+  depth: number;
 }) {
   const installStep = install ? [`cd ${shellQuote(checkout)} && ${install}`] : [];
   return [
     'set -e',
     `mkdir -p ${shellQuote(parentDir(mirror))}`,
-    `git clone --quiet --bare ${PARTIAL_CLONE_FILTER} https://github.com/${repo}.git ${shellQuote(mirror)}`,
+    `git clone --quiet --bare --depth=${depth} ${PARTIAL_CLONE_FILTER} https://github.com/${repo}.git ${shellQuote(mirror)}`,
     `git -C ${shellQuote(mirror)} config remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*'`,
     `git -C ${shellQuote(mirror)} worktree add --quiet --detach ${shellQuote(checkout)} HEAD`,
     ...installStep,
@@ -38,16 +40,18 @@ export function switchScript({
   mirror,
   dir,
   branch,
+  depth,
 }: {
   mirror: string;
   dir: string;
   branch: string | null;
+  depth: number;
 }) {
   const mirrorGit = `git -C ${shellQuote(mirror)}`;
   const dirGit = `git -C ${shellQuote(dir)}`;
   const lines = [
     'set -e',
-    `base=$(${mirrorGit} fetch --quiet origin HEAD && ${mirrorGit} rev-parse FETCH_HEAD)`,
+    `base=$(${mirrorGit} fetch --quiet --depth=${depth} origin HEAD && ${mirrorGit} rev-parse FETCH_HEAD)`,
   ];
   if (!branch) {
     lines.push(`${dirGit} checkout --quiet --detach "$base"`);
@@ -55,7 +59,7 @@ export function switchScript({
   }
   lines.push(
     `branch=${shellQuote(branch)}`,
-    `if ${mirrorGit} fetch --quiet origin "refs/heads/$branch:refs/remotes/origin/$branch"; then start="origin/$branch"; else start="$base"; fi`,
+    `if ${mirrorGit} fetch --quiet --depth=${depth} origin "refs/heads/$branch:refs/remotes/origin/$branch"; then start="origin/$branch"; else start="$base"; fi`,
     `${dirGit} checkout --quiet -B "$branch" "$start"`
   );
   return lines.join('\n');
