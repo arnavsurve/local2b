@@ -8,10 +8,5 @@ export function repoName(repo: string) {
 
 export const mirrorDir = (repo: string) =>
   `${HOME}/mirrors/${repoName(repo)}.git`;
-export const seedDir = `${HOME}/seed`;
+export const checkoutDir = (repo: string) => `${HOME}/${repoName(repo)}`;
 export const snapshotName = (repo: string) => `l2b-${repoName(repo)}`;
-
-export function worktreeDir(branch: string | null) {
-  const slug = branch ? branch.replaceAll('/', '-') : 'default';
-  return `${HOME}/work/${slug}`;
-}

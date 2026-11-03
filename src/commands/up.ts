@@ -3,9 +3,9 @@ import { requirePositional } from '../args';
 import {
   fullCloneCommand,
   shallowCloneCommand,
-  worktreeScript,
+  switchScript,
 } from '../git-scripts';
-import { mirrorDir, repoName, snapshotName, worktreeDir } from '../repo';
+import { checkoutDir, mirrorDir, snapshotName } from '../repo';
 import type { Command } from '../context';
 import type { Box } from '../providers/types';
 import { configureGit, pushCreds, runChecked } from '../session';
@@ -16,18 +16,23 @@ async function checkoutFromSnapshot({
   box,
   repo,
   branch,
+  install,
 }: {
   box: Box;
   repo: string;
   branch: string | null;
+  install: string | null;
 }) {
-  const dir = worktreeDir(branch);
+  const dir = checkoutDir(repo);
   await runChecked({
     box,
     cwd: HOME,
-    what: 'worktree checkout',
-    cmd: worktreeScript({ mirror: mirrorDir(repo), dir, branch }),
+    what: 'branch checkout',
+    cmd: switchScript({ mirror: mirrorDir(repo), dir, branch }),
   });
+  if (install) {
+    await runChecked({ box, cwd: dir, what: 'install', cmd: install });
+  }
   return dir;
 }
 
@@ -42,7 +47,7 @@ async function checkoutFromClone({
   branch: string | null;
   full: boolean;
 }) {
-  const dir = `${HOME}/${repoName(repo)}`;
+  const dir = checkoutDir(repo);
   const clone = full ? fullCloneCommand : shallowCloneCommand;
   await runChecked({
     box,
@@ -63,6 +68,7 @@ export const up: Command = async ({ ctx, args }) => {
       full: { type: 'boolean', default: false },
       doppler: { type: 'string' },
       image: { type: 'string' },
+      install: { type: 'string' },
     },
   });
   const name = requirePositional({ positionals, index: 0, usage: 'l2b up <name>' });
@@ -83,7 +89,12 @@ export const up: Command = async ({ ctx, args }) => {
 
   if (repo) {
     const dir = snapshotId
-      ? await checkoutFromSnapshot({ box, repo, branch })
+      ? await checkoutFromSnapshot({
+          box,
+          repo,
+          branch,
+          install: values.install ?? ctx.config.repos[repo]?.install ?? null,
+        })
       : await checkoutFromClone({ box, repo, branch, full: values.full });
     console.log(`checkout: ${dir}`);
   }

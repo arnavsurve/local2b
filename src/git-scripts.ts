@@ -10,31 +10,31 @@ const PARTIAL_CLONE_FILTER = '--filter=blob:limit=50m';
 export function bakeScript({
   repo,
   mirror,
-  seed,
+  checkout,
   install,
 }: {
   repo: string;
   mirror: string;
-  seed: string;
+  checkout: string;
   install: string | null;
 }) {
-  const installStep = install ? [`cd ${shellQuote(seed)} && ${install}`] : [];
+  const installStep = install ? [`cd ${shellQuote(checkout)} && ${install}`] : [];
   return [
     'set -e',
     `mkdir -p ${shellQuote(parentDir(mirror))}`,
     `git clone --quiet --bare ${PARTIAL_CLONE_FILTER} https://github.com/${repo}.git ${shellQuote(mirror)}`,
     `git -C ${shellQuote(mirror)} config remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*'`,
-    `git -C ${shellQuote(mirror)} worktree add --quiet --detach ${shellQuote(seed)} HEAD`,
+    `git -C ${shellQuote(mirror)} worktree add --quiet --detach ${shellQuote(checkout)} HEAD`,
     ...installStep,
   ].join('\n');
 }
 
 /**
- * Checks out `branch` into a new worktree of the mirror. A branch that does
- * not exist on the remote is created from the remote's default branch.
- * With no branch, the worktree is a detached checkout of the default branch.
+ * Points the checkout at `branch`, fetching it first. A branch that does not
+ * exist on the remote is created from the remote's default branch. With no
+ * branch, the checkout is detached at the default branch's tip.
  */
-export function worktreeScript({
+export function switchScript({
   mirror,
   dir,
   branch,
@@ -43,20 +43,20 @@ export function worktreeScript({
   dir: string;
   branch: string | null;
 }) {
-  const git = `git -C ${shellQuote(mirror)}`;
+  const mirrorGit = `git -C ${shellQuote(mirror)}`;
+  const dirGit = `git -C ${shellQuote(dir)}`;
   const lines = [
     'set -e',
-    `mkdir -p ${shellQuote(parentDir(dir))}`,
-    `base=$(${git} fetch --quiet origin HEAD && ${git} rev-parse FETCH_HEAD)`,
+    `base=$(${mirrorGit} fetch --quiet origin HEAD && ${mirrorGit} rev-parse FETCH_HEAD)`,
   ];
   if (!branch) {
-    lines.push(`${git} worktree add --quiet --detach ${shellQuote(dir)} "$base"`);
+    lines.push(`${dirGit} checkout --quiet --detach "$base"`);
     return lines.join('\n');
   }
   lines.push(
     `branch=${shellQuote(branch)}`,
-    `if ${git} fetch --quiet origin "refs/heads/$branch:refs/remotes/origin/$branch"; then start="origin/$branch"; else start="$base"; fi`,
-    `${git} worktree add --quiet -B "$branch" ${shellQuote(dir)} "$start"`
+    `if ${mirrorGit} fetch --quiet origin "refs/heads/$branch:refs/remotes/origin/$branch"; then start="origin/$branch"; else start="$base"; fi`,
+    `${dirGit} checkout --quiet -B "$branch" "$start"`
   );
   return lines.join('\n');
 }

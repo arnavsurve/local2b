@@ -1,15 +1,16 @@
 import { parseArgs } from 'node:util';
 import { requirePositional } from '../args';
 import { bakeScript } from '../git-scripts';
-import { mirrorDir, repoName, seedDir, snapshotName } from '../repo';
+import { checkoutDir, mirrorDir, repoName, snapshotName } from '../repo';
 import type { Command } from '../context';
 import { configureGit, pushCreds, runChecked, scrubCreds } from '../session';
 import { HOME } from '../shell';
 import { resolveImage, secretSources } from './shared';
 
 /**
- * Builds the per-repo snapshot: a bare partial mirror plus a seed worktree
- * with dependencies installed. Credentials are used to clone, then scrubbed,
+ * Builds the per-repo snapshot: a bare partial mirror plus a checkout with
+ * dependencies installed. `up` switches that checkout to the requested branch,
+ * so each box pays for a quick incremental install instead of a full one. Credentials are used to clone, then scrubbed,
  * and the snapshot is filesystem-only so no memory (and no secret) is kept.
  */
 export const bake: Command = async ({ ctx, args }) => {
@@ -48,7 +49,7 @@ export const bake: Command = async ({ ctx, args }) => {
     cmd: bakeScript({
       repo,
       mirror: mirrorDir(repo),
-      seed: seedDir,
+      checkout: checkoutDir(repo),
       install: values.install ?? ctx.config.repos[repo]?.install ?? null,
     }),
   });

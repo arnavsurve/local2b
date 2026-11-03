@@ -29,7 +29,7 @@ Link `src/cli.ts` onto your PATH as `l2b` for convenience. Requires [Bun](https:
 | `ls`, `pause <name>`, `down <name>` | Lifecycle |
 | `image build` | Build the provider's base image |
 
-`up` uses the repo's snapshot when one exists: a `git worktree add` from the baked mirror, so branches come up in seconds. Without one it falls back to a shallow partial clone. `--full` forces a full clone.
+`up` uses the repo's snapshot when one exists: a branch switch in the baked checkout plus an incremental install, so a box is ready in about a minute. Without one it falls back to a shallow partial clone. `--full` forces a full clone.
 
 ## Credentials
 
