@@ -64,7 +64,7 @@ Use `up`, `exec`, `down` when several commands need the same checkout: debugging
 | --- | --- |
 | `run [--repo o/r] [--branch b] [--keep] -- <cmd...>` | One-shot: create a box, run the command in the checkout, always destroy it; exit code passes through |
 | `up <name> [--repo o/r] [--branch b] [--full] [--doppler p/c] [--image ref]` | Create a sandbox, push credentials, check out a branch |
-| `bake <o/r> [--install cmd] [--warm cmd] [--branch b]` | Build a per-repo snapshot: bare partial mirror plus a warm install |
+| `bake <o/r> [--install cmd] [--warm cmd] [--branch b] [--if-older-than 12h]` | Build a per-repo snapshot: bare partial mirror plus a warm install. With `--if-older-than`, exits 0 without baking if the snapshot is newer than that (`m`, `h`, `d`, `w`) |
 | `exec <name> [--cwd dir] -- <cmd...>` | Run a command with secrets in its environment; defaults to the repo checkout |
 | `shell <name>` | Interactive terminal (needs a TTY) |
 | `install` | Put `l2b` on PATH and link the agent skill |
@@ -74,6 +74,33 @@ Use `up`, `exec`, `down` when several commands need the same checkout: debugging
 | `image build` | Build the provider's base image |
 
 `up` uses the repo's snapshot when one exists: a branch switch in the baked checkout plus an incremental install, so a box is ready in about a minute. Without one it falls back to a shallow partial clone. `--full` forces a full clone.
+
+## Keeping snapshots fresh
+
+A snapshot goes stale as the base branch moves, and `up` then spends longer catching up. When a snapshot is older than `staleSnapshotHours` (config, default 72), `up` and `run` print a one-line re-bake hint on stderr. The e2b SDK doesn't report snapshot creation time, so `bake` records it in `$XDG_STATE_HOME/l2b/bakes.json` (default `~/.local/state/l2b/`); a snapshot baked on another machine has no known age and gets no hint.
+
+Refresh on a schedule with `--if-older-than`, which makes the job cheap when nothing is due:
+
+    # cron: every night at 03:00
+    0 3 * * * l2b bake my-org/my-repo --if-older-than 20h
+
+    # launchd: ~/Library/LaunchAgents/dev.l2b.bake.plist
+    <plist version="1.0"><dict>
+      <key>Label</key><string>dev.l2b.bake</string>
+      <key>ProgramArguments</key><array>
+        <string>/Users/you/.local/bin/l2b</string><string>bake</string>
+        <string>my-org/my-repo</string><string>--if-older-than</string><string>20h</string>
+      </array>
+      <key>StartCalendarInterval</key><dict><key>Hour</key><integer>3</integer></dict>
+    </dict></plist>
+
+    # systemd: l2b-bake.service (oneshot) + l2b-bake.timer
+    [Service]
+    Type=oneshot
+    ExecStart=%h/.local/bin/l2b bake my-org/my-repo --if-older-than 20h
+    [Timer]
+    OnCalendar=*-*-* 03:00:00
+    Persistent=true
 
 ## Credentials
 

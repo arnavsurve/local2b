@@ -42,6 +42,8 @@ export const configSchema = z.object({
   cloneDepth: z.number().int().positive().default(50),
   /** Git remote host and how to authenticate to it; repos can override it. */
   gitHost: gitHostSchema.default({ type: 'github' }),
+  /** `up` and `run` hint to re-bake when the repo's snapshot is older than this. */
+  staleSnapshotHours: z.number().positive().default(72),
   /** Variables pushed into every sandbox, in addition to the git host token. */
   secrets: z.array(secretSourceSchema).default([]),
   /** Per-repo settings, keyed by `owner/name`. */

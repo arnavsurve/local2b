@@ -16,6 +16,7 @@ export function fakeContext({
   const alive = new Set<string>();
   const executed: string[] = [];
   const files = new Map<string, string>();
+  const snapshots = new Set<string>();
 
   const provider: Provider = {
     id: 'fake',
@@ -41,7 +42,10 @@ export function fakeContext({
         destroy: async () => {
           alive.delete(name);
         },
-        snapshot: async () => 'snap',
+        snapshot: async ({ name }) => {
+          snapshots.add(name);
+          return 'snap';
+        },
       };
       return box;
     },
@@ -50,10 +54,10 @@ export function fakeContext({
     },
     list: async () => [],
     exists: async ({ name }) => alive.has(name),
-    findSnapshot: async () => null,
+    findSnapshot: async ({ name }) => (snapshots.has(name) ? { id: 'snap', createdAt: null } : null),
     buildImage: async () => 'fake-image',
   };
 
   const ctx: Context = { config: configSchema.parse({}), provider };
-  return { ctx, alive, executed, files };
+  return { ctx, alive, executed, files, snapshots };
 }

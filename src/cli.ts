@@ -17,7 +17,7 @@ const USAGE = `l2b - remote dev sandboxes on e2b
 
   l2b run [--repo o/r] [--branch b] [--keep] -- <cmd...>  one-shot: box up, run, box destroyed (exit code passes through)
   l2b up <name> [--repo owner/repo] [--branch b] [--full] [--doppler project/config] [--image ref]
-  l2b bake <owner/repo>                        build the per-repo snapshot (bare mirror + warm install)
+  l2b bake <owner/repo> [--if-older-than 12h]  build the per-repo snapshot (bare mirror + warm install)
   l2b exec <name> [--cwd dir] -- <cmd...>      run a command (default cwd: the repo checkout)
   l2b creds <name> [--doppler project/config]  refresh GH token + doppler secrets
   l2b shell <name> [--cwd dir]                 interactive terminal (needs a TTY)

@@ -7,9 +7,10 @@ import {
 import { hostFor, remoteUrl, type GitHost } from './git-host';
 import { step } from './progress';
 import type { Box } from './providers/types';
-import { checkoutDir, mirrorDir, snapshotName } from './repo';
+import { checkoutDir, mirrorDir } from './repo';
 import { configureGit, pushCreds, pushEnv, runChecked } from './session';
 import { HOME } from './shell';
+import { lookupSnapshot, staleSnapshotHint } from './snapshots';
 import { secretSourcesFor, resolveImage } from './sources';
 
 export type ProvisionOpts = {
@@ -85,10 +86,17 @@ export async function provisionBox({
 }) {
   const { name, repo, branch, full } = opts;
   step('looking for a baked snapshot');
-  const snapshotId =
-    repo && !full
-      ? await ctx.provider.findSnapshot({ name: snapshotName(repo) })
-      : null;
+  const snapshot = repo && !full ? await lookupSnapshot({ provider: ctx.provider, repo }) : null;
+  const snapshotId = snapshot?.id ?? null;
+  if (repo && snapshot) {
+    const hint = staleSnapshotHint({
+      repo,
+      createdAt: snapshot.createdAt,
+      now: new Date(),
+      thresholdHours: ctx.config.staleSnapshotHours,
+    });
+    if (hint) console.error(`l2b: ${hint}`);
+  }
   const image = snapshotId ?? resolveImage({ ctx, override: opts.image });
   const host = hostFor({ config: ctx.config, repo });
   const workdir = repo ? checkoutDir(repo) : HOME;
