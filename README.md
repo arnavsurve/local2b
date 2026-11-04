@@ -108,7 +108,7 @@ Image settings (`e2b.*`) take effect on the next `l2b image build`; per-repo `wa
 
 ## Roadmap
 
-Planned, not yet available: owner-aware snapshot names, a provider home-directory setting, configurable image features, non-GitHub git hosts, and `bake --if-older-than`.
+Planned, not yet available: a provider home-directory setting, configurable image features, non-GitHub git hosts, and `bake --if-older-than`.
 
 ## Adding a provider
 
