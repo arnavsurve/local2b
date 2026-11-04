@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { bake } from './commands/bake';
 import { provisionBox } from './provision';
+import { snapshotName } from './repo';
 import { lookupSnapshot, recordBake } from './snapshots';
 import { fakeContext } from './test/fake-provider';
 
@@ -24,7 +25,7 @@ afterEach(() => {
 const hoursAgo = (hours: number) => new Date(Date.now() - hours * HOUR);
 
 function seedSnapshot({ snapshots, ageHours }: { snapshots: Set<string>; ageHours: number | null }) {
-  snapshots.add('l2b-r');
+  snapshots.add(snapshotName('o/r'));
   if (ageHours === null) return Promise.resolve();
   return recordBake({ provider: 'fake', repo: 'o/r', at: hoursAgo(ageHours) });
 }
