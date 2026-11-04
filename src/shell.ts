@@ -1,5 +1,3 @@
-export const HOME = '/home/user';
-
 export function shellQuote(arg: string) {
   return `'${arg.replaceAll("'", `'\\''`)}'`;
 }

@@ -7,7 +7,9 @@ import {
 } from './secrets';
 
 export const ENV_FILE = '/dev/shm/l2b.env';
-export const PLAIN_ENV_FILE = '/home/user/.l2b-env';
+
+export const plainEnvFile = ({ homeDir }: { homeDir: string }) =>
+  `${homeDir}/.l2b-env`;
 
 export class CommandFailedError extends Error {
   constructor(
@@ -19,8 +21,8 @@ export class CommandFailedError extends Error {
 }
 
 /** Plain env is sourced first so a secret of the same name wins. */
-export function withEnv(cmd: string) {
-  return `for f in ${PLAIN_ENV_FILE} ${ENV_FILE}; do [ -f $f ] && . $f; done; ${cmd}`;
+export function withEnv({ homeDir, cmd }: { homeDir: string; cmd: string }) {
+  return `for f in ${plainEnvFile({ homeDir })} ${ENV_FILE}; do [ -f $f ] && . $f; done; ${cmd}`;
 }
 
 /**
@@ -58,7 +60,7 @@ export async function pushEnv({
   box: Box;
   env: Record<string, string>;
 }) {
-  await box.writeFile({ path: PLAIN_ENV_FILE, content: toEnvFile(env) });
+  await box.writeFile({ path: plainEnvFile({ homeDir: box.homeDir }), content: toEnvFile(env) });
 }
 
 export async function configureGit({ box, host }: { box: Box; host: GitHost }) {
@@ -72,7 +74,7 @@ export async function scrubCreds({ box }: { box: Box }) {
 /** Streams output to this process and resolves with the remote exit code. */
 export function run({ box, cmd, cwd }: { box: Box; cmd: string; cwd: string }) {
   return box.exec({
-    cmd: withEnv(cmd),
+    cmd: withEnv({ homeDir: box.homeDir, cmd }),
     cwd,
     onOutput: ({ stream, data }) => {
       (stream === 'stdout' ? process.stdout : process.stderr).write(data);

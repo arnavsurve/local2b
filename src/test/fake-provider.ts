@@ -9,9 +9,11 @@ import type { Box, Provider } from '../providers/types';
 export function fakeContext({
   execExitCode,
   failExecWhen,
+  homeDir,
 }: {
   execExitCode: number;
   failExecWhen: string | null;
+  homeDir: string;
 }) {
   const alive = new Set<string>();
   const executed: string[] = [];
@@ -20,12 +22,14 @@ export function fakeContext({
 
   const provider: Provider = {
     id: 'fake',
+    homeDir,
     defaultImage: 'fake-image',
     async create({ name, workdir }) {
       alive.add(name);
       const box: Box = {
         id: `id-${name}`,
         workdir,
+        homeDir,
         async exec({ cmd }) {
           executed.push(cmd);
           if (failExecWhen && cmd.includes(failExecWhen)) throw new Error('exec blew up');

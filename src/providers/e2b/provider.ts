@@ -8,7 +8,7 @@ import { snapshotHasName } from './snapshot-match';
 
 const NAME_KEY = 'l2b';
 const WORKDIR_KEY = 'l2b_workdir';
-const FALLBACK_WORKDIR = '/home/user';
+const HOME_DIR = '/home/user';
 const HEARTBEATS_PER_IDLE_WINDOW = 3;
 const BUILD_REQUEST_TIMEOUT_MS = 30 * 60 * 1000;
 const IMAGE_NAME = 'l2b-dev';
@@ -18,10 +18,12 @@ function wrapBox({
   sandbox,
   idle,
   workdir,
+  homeDir,
 }: {
   sandbox: Sandbox;
   idle: IdlePolicy;
   workdir: string;
+  homeDir: string;
 }): Box {
   const keepAlive = () => sandbox.setTimeout(idle.ms);
   const held = <T>(task: () => Promise<T>) =>
@@ -34,6 +36,7 @@ function wrapBox({
   return {
     id: sandbox.sandboxId,
     workdir,
+    homeDir,
     exec: ({ cmd, cwd, onOutput }) =>
       held(async () => {
         try {
@@ -106,6 +109,7 @@ export function createE2bProvider({
 
   return {
     id: 'e2b',
+    homeDir: HOME_DIR,
     defaultImage: IMAGE_NAME,
 
     async create({ name, image, workdir }) {
@@ -120,7 +124,7 @@ export function createE2bProvider({
         lifecycle: { onTimeout: idle.action },
         metadata: { [NAME_KEY]: name, [WORKDIR_KEY]: workdir },
       });
-      return wrapBox({ sandbox, idle, workdir });
+      return wrapBox({ sandbox, idle, workdir, homeDir: HOME_DIR });
     },
 
     async connect({ name }) {
@@ -133,7 +137,8 @@ export function createE2bProvider({
       return wrapBox({
         sandbox,
         idle,
-        workdir: info.metadata[WORKDIR_KEY] ?? FALLBACK_WORKDIR,
+        workdir: info.metadata[WORKDIR_KEY] ?? HOME_DIR,
+        homeDir: HOME_DIR,
       });
     },
 

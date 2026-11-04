@@ -31,7 +31,7 @@ function seedSnapshot({ snapshots, ageHours }: { snapshots: Set<string>; ageHour
 }
 
 test('lookupSnapshot has no snapshot until one exists, and no age until a bake is recorded', async () => {
-  const { ctx, snapshots } = fakeContext({ execExitCode: 0, failExecWhen: null });
+  const { ctx, snapshots } = fakeContext({ execExitCode: 0, failExecWhen: null, homeDir: '/home/user' });
   expect(await lookupSnapshot({ provider: ctx.provider, repo: 'o/r' })).toBeNull();
   await seedSnapshot({ snapshots, ageHours: null });
   expect((await lookupSnapshot({ provider: ctx.provider, repo: 'o/r' }))?.createdAt).toBeNull();
@@ -41,7 +41,7 @@ test('lookupSnapshot has no snapshot until one exists, and no age until a bake i
 });
 
 test('bake --if-older-than skips a snapshot that is fresh enough', async () => {
-  const { ctx, snapshots, executed, alive } = fakeContext({ execExitCode: 0, failExecWhen: null });
+  const { ctx, snapshots, executed, alive } = fakeContext({ execExitCode: 0, failExecWhen: null, homeDir: '/home/user' });
   await seedSnapshot({ snapshots, ageHours: 2 });
   const log = spyOn(console, 'log').mockImplementation(() => {});
   await bake({ ctx, args: ['o/r', '--if-older-than', '12h'] });
@@ -52,7 +52,7 @@ test('bake --if-older-than skips a snapshot that is fresh enough', async () => {
 });
 
 test('bake --if-older-than re-bakes an older snapshot and records the new bake time', async () => {
-  const { ctx, snapshots, executed } = fakeContext({ execExitCode: 0, failExecWhen: null });
+  const { ctx, snapshots, executed } = fakeContext({ execExitCode: 0, failExecWhen: null, homeDir: '/home/user' });
   await seedSnapshot({ snapshots, ageHours: 30 });
   const log = spyOn(console, 'log').mockImplementation(() => {});
   await bake({ ctx, args: ['o/r', '--if-older-than', '12h'] });
@@ -63,7 +63,7 @@ test('bake --if-older-than re-bakes an older snapshot and records the new bake t
 });
 
 test.each([false, true])('bake --if-older-than re-bakes when the age is unknown (snapshot exists: %p)', async (exists) => {
-  const { ctx, snapshots, executed } = fakeContext({ execExitCode: 0, failExecWhen: null });
+  const { ctx, snapshots, executed } = fakeContext({ execExitCode: 0, failExecWhen: null, homeDir: '/home/user' });
   if (exists) await seedSnapshot({ snapshots, ageHours: null });
   const log = spyOn(console, 'log').mockImplementation(() => {});
   await bake({ ctx, args: ['o/r', '--if-older-than', '12h'] });
@@ -72,13 +72,13 @@ test.each([false, true])('bake --if-older-than re-bakes when the age is unknown 
 });
 
 test('bake rejects a malformed --if-older-than before doing any work', async () => {
-  const { ctx, executed } = fakeContext({ execExitCode: 0, failExecWhen: null });
+  const { ctx, executed } = fakeContext({ execExitCode: 0, failExecWhen: null, homeDir: '/home/user' });
   await expect(bake({ ctx, args: ['o/r', '--if-older-than', 'soon'] })).rejects.toThrow('bad duration');
   expect(executed).toEqual([]);
 });
 
 async function provisionHints({ ageHours, staleSnapshotHours }: { ageHours: number | null; staleSnapshotHours: number | null }) {
-  const { ctx, snapshots } = fakeContext({ execExitCode: 0, failExecWhen: null });
+  const { ctx, snapshots } = fakeContext({ execExitCode: 0, failExecWhen: null, homeDir: '/home/user' });
   if (staleSnapshotHours !== null) ctx.config.staleSnapshotHours = staleSnapshotHours;
   await seedSnapshot({ snapshots, ageHours });
   const err = spyOn(console, 'error').mockImplementation(() => {});

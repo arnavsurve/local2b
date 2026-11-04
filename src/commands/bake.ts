@@ -7,7 +7,6 @@ import { checkoutDir, mirrorDir, repoName, snapshotName } from '../repo';
 import type { Command } from '../context';
 import { step } from '../progress';
 import { configureGit, pushCreds, pushEnv, runChecked, scrubCreds } from '../session';
-import { HOME } from '../shell';
 import { lookupSnapshot, formatAge, recordBake } from '../snapshots';
 import { resolveImage, secretSourcesFor } from '../sources';
 
@@ -56,7 +55,7 @@ export const bake: Command = async ({ ctx, args }) => {
   const box = await ctx.provider.create({
     name: bakeName,
     image: resolveImage({ ctx, override: values.image ?? null }),
-    workdir: HOME,
+    workdir: ctx.provider.homeDir,
   });
   await pushCreds({
     box,
@@ -68,12 +67,12 @@ export const bake: Command = async ({ ctx, args }) => {
   step('cloning the mirror and installing dependencies (several minutes)');
   await runChecked({
     box,
-    cwd: HOME,
+    cwd: box.homeDir,
     what: `bake (sandbox ${bakeName} left up for inspection)`,
     cmd: bakeScript({
       remote: remoteUrl({ host, repo }),
-      mirror: mirrorDir(repo),
-      checkout: checkoutDir(repo),
+      mirror: mirrorDir({ homeDir: box.homeDir, repo }),
+      checkout: checkoutDir({ homeDir: box.homeDir, repo }),
       install: values.install ?? ctx.config.repos[repo]?.install ?? null,
       warm: values.warm ?? ctx.config.repos[repo]?.warm ?? null,
       branch: values.branch ?? ctx.config.repos[repo]?.baseBranch ?? null,

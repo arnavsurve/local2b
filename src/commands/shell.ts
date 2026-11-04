@@ -41,7 +41,7 @@ export const shell: Command = async ({ ctx, args }) => {
   });
   process.stdin.resume();
 
-  const loadEnv = `${withEnv('clear')}\n`;
+  const loadEnv = `${withEnv({ homeDir: box.homeDir, cmd: 'clear' })}\n`;
   await session.sendInput(new TextEncoder().encode(loadEnv));
 
   try {
