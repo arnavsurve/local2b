@@ -1,5 +1,6 @@
 {
   "provider": "e2b",
+  "gitHost": { "type": "github" },
   "secrets": [{ "type": "doppler", "project": "my-project", "config": "dev" }],
   "repos": {
     "my-org/my-repo": { "install": "yarn install" }

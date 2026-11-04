@@ -1,5 +1,6 @@
 import { parseArgs } from 'node:util';
 import { requirePositional } from '../args';
+import { hostFor, remoteUrl } from '../git-host';
 import { bakeScript } from '../git-scripts';
 import { checkoutDir, mirrorDir, repoName, snapshotName } from '../repo';
 import type { Command } from '../context';
@@ -31,6 +32,7 @@ export const bake: Command = async ({ ctx, args }) => {
     index: 0,
     usage: 'l2b bake <owner/repo>',
   });
+  const host = hostFor({ config: ctx.config, repo });
   const bakeName = `bake-${repoName(repo)}`;
   if (await ctx.provider.exists({ name: bakeName })) {
     throw new Error(`stale bake sandbox "${bakeName}" exists; run: l2b down ${bakeName}`);
@@ -44,17 +46,18 @@ export const bake: Command = async ({ ctx, args }) => {
   });
   await pushCreds({
     box,
+    host,
     sources: secretSourcesFor({ ctx, doppler: values.doppler ?? null }),
   });
   await pushEnv({ box, env: ctx.config.repos[repo]?.env ?? {} });
-  await configureGit({ box });
+  await configureGit({ box, host });
   step('cloning the mirror and installing dependencies (several minutes)');
   await runChecked({
     box,
     cwd: HOME,
     what: `bake (sandbox ${bakeName} left up for inspection)`,
     cmd: bakeScript({
-      repo,
+      remote: remoteUrl({ host, repo }),
       mirror: mirrorDir(repo),
       checkout: checkoutDir(repo),
       install: values.install ?? ctx.config.repos[repo]?.install ?? null,

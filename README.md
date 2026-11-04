@@ -50,7 +50,7 @@ Three layers. An **image** holds tooling only (Node, git, gh, Doppler, Docker, P
     bun src/cli.ts url task1 3000
     bun src/cli.ts down task1
 
-Run `bun src/cli.ts install` to put `l2b` on your PATH (`~/.local/bin`) and link the agent skill into `~/.agents/skills` and `~/.claude/skills`. Requires [Bun](https://bun.sh), and `gh` for GitHub auth (or `GH_TOKEN`). Doppler is optional.
+Run `bun src/cli.ts install` to put `l2b` on your PATH (`~/.local/bin`) and link the agent skill into `~/.agents/skills` and `~/.claude/skills`. Requires [Bun](https://bun.sh), and `gh` for GitHub auth (or `GH_TOKEN`; GitLab uses `GITLAB_TOKEN` or `glab`). Doppler is optional.
 
 ## `run` or `up`/`exec`/`down`
 
@@ -77,7 +77,7 @@ Use `up`, `exec`, `down` when several commands need the same checkout: debugging
 
 ## Credentials
 
-Nothing secret is ever baked into an image or snapshot. At call time, `l2b` resolves a GitHub token (`GH_TOKEN`, or `gh auth token`) plus any configured secret sources locally, and writes them to the sandbox's tmpfs (`/dev/shm/l2b.env`, mode 600), which every `exec` sources. Snapshots are filesystem-only and the file is removed before snapshotting. A paused sandbox still holds its memory, so treat it as holding secrets.
+Nothing secret is ever baked into an image or snapshot. At call time, `l2b` resolves a git host token (GitHub: `GH_TOKEN`, or `gh auth token`) plus any configured secret sources locally, and writes them to the sandbox's tmpfs (`/dev/shm/l2b.env`, mode 600), which every `exec` sources. Snapshots are filesystem-only and the file is removed before snapshotting. A paused sandbox still holds its memory, so treat it as holding secrets.
 
 Secret sources (`secrets` in config, or `--doppler project/config`): `doppler`, or `env` (a list of local env var names). Provider API keys use the same mechanism via a value reference, e.g. `{ "from": "doppler", ... }` or `{ "from": "env", "name": "E2B_API_KEY" }`.
 
@@ -90,6 +90,8 @@ Secret sources (`secrets` in config, or `--doppler project/config`): `doppler`, 
 | `provider` | `"e2b"` | Sandbox provider |
 | `image` | provider default | Override the base image |
 | `secrets` | `[]` | Sources pushed into every box: `{ "type": "doppler", "project", "config" }` or `{ "type": "env", "names": [...] }` |
+| `gitHost` | `{ "type": "github" }` | Git remote host and auth; see Git hosts |
+| `repos.<o/r>.gitHost` | global `gitHost` | Per-repo override |
 | `idle.minutes` | `15` | Box expires this long after the last l2b activity |
 | `idle.action` | `"kill"` | `kill` discards the box; `pause` keeps disk and memory (and secrets) |
 | `cloneDepth` | `50` | Commits of history kept in a baked mirror |
@@ -110,7 +112,19 @@ Image settings (`e2b.*`) take effect on the next `l2b image build`; per-repo `wa
 
 ## Roadmap
 
-Planned, not yet available: a provider home-directory setting, non-GitHub git hosts, and `bake --if-older-than`.
+Planned, not yet available: a provider home-directory setting, and `bake --if-older-than`.
+
+## Git hosts
+
+GitHub is the default. Set `gitHost` globally, or per repo under `repos.<o/r>.gitHost`:
+
+| `type` | Fields | Token source | Exported as |
+| --- | --- | --- | --- |
+| `github` | none | `GH_TOKEN`, `GITHUB_TOKEN`, or `gh auth token` | `GH_TOKEN` |
+| `gitlab` | `baseUrl` (default `https://gitlab.com`) | `GITLAB_TOKEN`, or `glab auth token` | `GITLAB_TOKEN` |
+| `generic` | `baseUrl`, `username`, `token` (value reference) | the value reference | `L2B_GIT_TOKEN` |
+
+`generic` covers Bitbucket, Gitea and other self-hosted https hosts, e.g. `{ "type": "generic", "baseUrl": "https://bitbucket.org", "username": "x-token-auth", "token": { "from": "env", "name": "BITBUCKET_TOKEN" } }`. The in-sandbox git credential helper is scoped to the host's origin. `l2b creds <name> --repo o/r` refreshes the token for that repo's host.
 
 ## Adding a provider
 

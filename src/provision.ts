@@ -4,6 +4,7 @@ import {
   shallowCloneCommand,
   switchScript,
 } from './git-scripts';
+import { hostFor, remoteUrl, type GitHost } from './git-host';
 import { step } from './progress';
 import type { Box } from './providers/types';
 import { checkoutDir, mirrorDir, snapshotName } from './repo';
@@ -50,11 +51,13 @@ async function checkoutFromSnapshot({
 async function checkoutFromClone({
   box,
   repo,
+  host,
   branch,
   full,
 }: {
   box: Box;
   repo: string;
+  host: GitHost;
   branch: string | null;
   full: boolean;
 }) {
@@ -64,7 +67,7 @@ async function checkoutFromClone({
     box,
     cwd: HOME,
     what: 'git clone',
-    cmd: clone({ repo, dir: checkoutDir(repo), branch }),
+    cmd: clone({ remote: remoteUrl({ host, repo }), dir: checkoutDir(repo), branch }),
   });
 }
 
@@ -87,6 +90,7 @@ export async function provisionBox({
       ? await ctx.provider.findSnapshot({ name: snapshotName(repo) })
       : null;
   const image = snapshotId ?? resolveImage({ ctx, override: opts.image });
+  const host = hostFor({ config: ctx.config, repo });
   const workdir = repo ? checkoutDir(repo) : HOME;
 
   step(`creating box "${name}"`);
@@ -95,10 +99,11 @@ export async function provisionBox({
     step('pushing credentials');
     await pushCreds({
       box,
+      host,
       sources: secretSourcesFor({ ctx, doppler: opts.doppler }),
     });
     await pushEnv({ box, env: repo ? (ctx.config.repos[repo]?.env ?? {}) : {} });
-    await configureGit({ box });
+    await configureGit({ box, host });
     if (repo && snapshotId) {
       await checkoutFromSnapshot({
         box,
@@ -108,7 +113,7 @@ export async function provisionBox({
         depth: ctx.config.cloneDepth,
       });
     } else if (repo) {
-      await checkoutFromClone({ box, repo, branch, full });
+      await checkoutFromClone({ box, repo, host, branch, full });
     }
   } catch (err) {
     await box.destroy().catch(() => {});

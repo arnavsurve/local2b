@@ -2,6 +2,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { z } from 'zod';
 import { DEFAULT_FEATURES, featureSchema } from './providers/e2b/image';
+import { gitHostSchema } from './git-host';
 import { secretSourceSchema, valueRefSchema } from './secrets';
 
 const e2bConfigSchema = z
@@ -39,13 +40,17 @@ export const configSchema = z.object({
   idle: idleSchema.default(idleSchema.parse({})),
   /** Commits of history kept in a baked mirror. */
   cloneDepth: z.number().int().positive().default(50),
-  /** Variables pushed into every sandbox, in addition to a GitHub token. */
+  /** Git remote host and how to authenticate to it; repos can override it. */
+  gitHost: gitHostSchema.default({ type: 'github' }),
+  /** Variables pushed into every sandbox, in addition to the git host token. */
   secrets: z.array(secretSourceSchema).default([]),
   /** Per-repo settings, keyed by `owner/name`. */
   repos: z
     .record(
       z.string(),
       z.object({
+        /** Overrides the global `gitHost` for this repo. */
+        gitHost: gitHostSchema.nullable().default(null),
         /** Branch the snapshot is baked from (the one you mostly work off), when it is not the repo's default branch. */
         baseBranch: z.string().nullable().default(null),
         /** Runs in the checkout on every `up`; keep it fast and incremental. */
