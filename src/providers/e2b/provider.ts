@@ -4,6 +4,7 @@ import { withHeartbeat } from '../../keepalive';
 import type { Config } from '../../config';
 import { resolveValue } from '../../secrets';
 import { devTemplate } from './template';
+import { snapshotHasName } from './snapshot-match';
 
 const NAME_KEY = 'l2b';
 const WORKDIR_KEY = 'l2b_workdir';
@@ -157,10 +158,7 @@ export function createE2bProvider({
       const paginator = Sandbox.listSnapshots({ apiKey: await apiKey() });
       do {
         for (const snapshot of await paginator.nextItems()) {
-          const matches = snapshot.names.some(
-            (full) => full.split(':')[0]?.endsWith(`/${name}`)
-          );
-          if (matches) return snapshot.snapshotId;
+          if (snapshotHasName({ names: snapshot.names, name })) return snapshot.snapshotId;
         }
       } while (paginator.hasNext);
       return null;
