@@ -48,3 +48,18 @@ test('an invalid config names the file and the bad field', async () => {
   const path = writeConfig(JSON.stringify({ provider: 'nope' }));
   await expect(loadConfig()).rejects.toThrow(path);
 });
+
+test('e2b image features default to everything and reject unknown names', async () => {
+  process.env.L2B_CONFIG = '/nonexistent/l2b.json';
+  const defaults = await loadConfig();
+  expect(defaults.e2b.features).toEqual(['node', 'gh', 'doppler', 'docker', 'postgres', 'redis', 'ripgrep', 'tmux']);
+  expect(defaults.e2b.nodeMajor).toBe(24);
+
+  writeConfig(JSON.stringify({ e2b: { features: ['docker', 'mysql'] } }));
+  await expect(loadConfig()).rejects.toThrow(/features/);
+});
+
+test('npm globals need the node feature', async () => {
+  writeConfig(JSON.stringify({ e2b: { features: ['gh'], npmGlobals: ['bun'] } }));
+  await expect(loadConfig()).rejects.toThrow(/node/);
+});

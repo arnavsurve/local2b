@@ -1,18 +1,29 @@
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { z } from 'zod';
+import { DEFAULT_FEATURES, featureSchema } from './providers/e2b/image';
 import { secretSourceSchema, valueRefSchema } from './secrets';
 
-const e2bConfigSchema = z.object({
+const e2bConfigSchema = z
+  .object({
   apiKey: valueRefSchema.default({ from: 'env', name: 'E2B_API_KEY' }),
   cpuCount: z.number().int().positive().default(4),
   memoryMB: z.number().int().positive().default(8192),
+  /** Tooling baked into the base image. Defaults to everything; drop what you do not need. */
+  features: z.array(featureSchema).default(DEFAULT_FEATURES),
+  /** Node.js major version installed by the `node` feature. */
+  nodeMajor: z.number().int().positive().default(24),
+  /** Installed globally with npm; requires the `node` feature. */
   npmGlobals: z.array(z.string()).default([]),
   /** Extra apt packages baked into the base image, e.g. a toolchain a repo's build tooling shells out to. */
   aptPackages: z.array(z.string()).default([]),
   /** Shell commands run as the box user at image build, after the system packages (sudo is available), e.g. to install a toolchain. */
   imageCommands: z.array(z.string()).default([]),
-});
+  })
+  .refine((e2b) => e2b.npmGlobals.length === 0 || e2b.features.includes('node'), {
+    message: 'npmGlobals requires the "node" feature',
+    path: ['features'],
+  });
 
 const idleSchema = z.object({
   minutes: z.number().positive().default(15),

@@ -165,7 +165,11 @@ export function createE2bProvider({
     },
 
     async buildImage() {
-      await Template.build(devTemplate({ npmGlobals: config.npmGlobals, aptPackages: config.aptPackages,
+      await Template.build(devTemplate({
+          features: config.features,
+          nodeMajor: config.nodeMajor,
+          npmGlobals: config.npmGlobals,
+          aptPackages: config.aptPackages,
           imageCommands: config.imageCommands,
         }), IMAGE_NAME, {
         apiKey: await apiKey(),

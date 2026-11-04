@@ -100,7 +100,9 @@ Secret sources (`secrets` in config, or `--doppler project/config`): `doppler`, 
 | `e2b.apiKey` | `{ "from": "env", "name": "E2B_API_KEY" }` | Value reference: `env` or `doppler` |
 | `e2b.cpuCount` | `4` | vCPUs at image build |
 | `e2b.memoryMB` | `8192` | Memory at image build |
-| `e2b.npmGlobals` | `[]` | npm packages installed globally in the image |
+| `e2b.features` | all | Tooling baked into the image: `node`, `gh`, `doppler`, `docker`, `postgres`, `redis`, `ripgrep`, `tmux` (core git/curl/jq/sudo/build-essential/python3 always present; `[]` for a lean image) |
+| `e2b.nodeMajor` | `24` | Node.js major version for the `node` feature |
+| `e2b.npmGlobals` | `[]` | npm packages installed globally in the image (requires `node`) |
 | `e2b.aptPackages` | `[]` | Extra apt packages in the image |
 | `e2b.imageCommands` | `[]` | Shell commands run as the box user at image build, e.g. to install a toolchain |
 
@@ -108,7 +110,7 @@ Image settings (`e2b.*`) take effect on the next `l2b image build`; per-repo `wa
 
 ## Roadmap
 
-Planned, not yet available: a provider home-directory setting, configurable image features, non-GitHub git hosts, and `bake --if-older-than`.
+Planned, not yet available: a provider home-directory setting, non-GitHub git hosts, and `bake --if-older-than`.
 
 ## Adding a provider
 

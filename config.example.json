@@ -8,6 +8,10 @@
     "apiKey": { "from": "doppler", "project": "my-project", "config": "dev", "name": "E2B_API_KEY" },
     "cpuCount": 8,
     "memoryMB": 16384,
-    "npmGlobals": []
+    "features": ["node", "gh", "doppler", "docker", "postgres", "redis", "ripgrep", "tmux"],
+    "nodeMajor": 24,
+    "npmGlobals": [],
+    "aptPackages": [],
+    "imageCommands": []
   }
 }
