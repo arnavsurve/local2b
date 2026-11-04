@@ -1,6 +1,6 @@
+import { credentialHelperCommand, resolveHostToken, tokenEnvVar, type GitHost } from './git-host';
 import type { Box } from './providers/types';
 import {
-  githubToken,
   loadSecrets,
   toEnvFile,
   type SecretSource,
@@ -8,8 +8,6 @@ import {
 
 export const ENV_FILE = '/dev/shm/l2b.env';
 export const PLAIN_ENV_FILE = '/home/user/.l2b-env';
-
-const CREDENTIAL_HELPER = `git config --global credential.helper '!f() { echo username=x-access-token; echo password=$GH_TOKEN; }; f'`;
 
 export class CommandFailedError extends Error {
   constructor(
@@ -32,13 +30,15 @@ export function withEnv(cmd: string) {
 export async function pushCreds({
   box,
   sources,
+  host,
 }: {
   box: Box;
   sources: SecretSource[];
+  host: GitHost;
 }) {
   const vars: Record<string, string> = {};
   for (const source of sources) Object.assign(vars, await loadSecrets(source));
-  vars.GH_TOKEN = await githubToken();
+  vars[tokenEnvVar(host)] = await resolveHostToken(host);
   await box.writeFile({ path: ENV_FILE, content: toEnvFile(vars) });
   await box.exec({
     cmd: `chmod 600 ${ENV_FILE}`,
@@ -61,8 +61,8 @@ export async function pushEnv({
   await box.writeFile({ path: PLAIN_ENV_FILE, content: toEnvFile(env) });
 }
 
-export async function configureGit({ box }: { box: Box }) {
-  await run({ box, cmd: CREDENTIAL_HELPER, cwd: '/' });
+export async function configureGit({ box, host }: { box: Box; host: GitHost }) {
+  await run({ box, cmd: credentialHelperCommand(host), cwd: '/' });
 }
 
 export async function scrubCreds({ box }: { box: Box }) {

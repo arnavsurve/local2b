@@ -103,7 +103,7 @@ test('a shallow mirror stays shallow but still switches to branches', async () =
 });
 
 test('bake script clones the base branch and chains install then warm-up', () => {
-  const base = { repo: 'o/r', mirror: '/m/r.git', checkout: '/seed', depth: 50 };
+  const base = { remote: 'https://github.com/o/r.git', mirror: '/m/r.git', checkout: '/seed', depth: 50 };
   const none = bakeScript({ ...base, install: null, warm: null, branch: null });
   expect(none).not.toContain('/seed &&');
   expect(none).not.toContain('--branch');
@@ -115,5 +115,6 @@ test('bake script clones the base branch and chains install then warm-up', () =>
     branch: 'trunk',
   });
   expect(full).toContain("--branch 'trunk'");
+  expect(full).toContain(" 'https://github.com/o/r.git' '/m/r.git'");
   expect(full).toContain("cd '/seed' && yarn install && yarn gen");
 });

@@ -8,7 +8,7 @@ import { parentDir, shellQuote } from './shell';
 const PARTIAL_CLONE_FILTER = '--filter=blob:limit=50m';
 
 export function bakeScript({
-  repo,
+  remote,
   mirror,
   checkout,
   install,
@@ -16,7 +16,7 @@ export function bakeScript({
   branch,
   depth,
 }: {
-  repo: string;
+  remote: string;
   mirror: string;
   checkout: string;
   install: string | null;
@@ -32,7 +32,7 @@ export function bakeScript({
   return [
     'set -e',
     `mkdir -p ${shellQuote(parentDir(mirror))}`,
-    `git clone --quiet --bare --depth=${depth} ${PARTIAL_CLONE_FILTER} ${branchFlag} https://github.com/${repo}.git ${shellQuote(mirror)}`,
+    `git clone --quiet --bare --depth=${depth} ${PARTIAL_CLONE_FILTER} ${branchFlag} ${shellQuote(remote)} ${shellQuote(mirror)}`,
     `git -C ${shellQuote(mirror)} config remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*'`,
     `git -C ${shellQuote(mirror)} worktree add --quiet --detach ${shellQuote(checkout)} HEAD`,
     ...prepareStep,
@@ -74,27 +74,27 @@ export function switchScript({
 }
 
 export function shallowCloneCommand({
-  repo,
+  remote,
   dir,
   branch,
 }: {
-  repo: string;
+  remote: string;
   dir: string;
   branch: string | null;
 }) {
   const branchFlag = branch ? `-b ${shellQuote(branch)}` : '';
-  return `git clone --quiet --depth=1 ${PARTIAL_CLONE_FILTER} ${branchFlag} https://github.com/${repo}.git ${shellQuote(dir)}`;
+  return `git clone --quiet --depth=1 ${PARTIAL_CLONE_FILTER} ${branchFlag} ${shellQuote(remote)} ${shellQuote(dir)}`;
 }
 
 export function fullCloneCommand({
-  repo,
+  remote,
   dir,
   branch,
 }: {
-  repo: string;
+  remote: string;
   dir: string;
   branch: string | null;
 }) {
   const branchFlag = branch ? `-b ${shellQuote(branch)}` : '';
-  return `git clone --quiet ${branchFlag} https://github.com/${repo}.git ${shellQuote(dir)}`;
+  return `git clone --quiet ${branchFlag} ${shellQuote(remote)} ${shellQuote(dir)}`;
 }

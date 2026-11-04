@@ -86,16 +86,6 @@ export async function resolveValue(ref: ValueRef) {
   }
 }
 
-export async function githubToken() {
-  const fromEnv = process.env.GH_TOKEN ?? process.env.GITHUB_TOKEN;
-  if (fromEnv) return fromEnv;
-  const out = await $`gh auth token`.nothrow().quiet();
-  if (out.exitCode !== 0) {
-    throw new Error('no GitHub token: set GH_TOKEN or run `gh auth login`');
-  }
-  return out.text().trim();
-}
-
 export function toEnvFile(vars: Record<string, string>) {
   return Object.entries(vars)
     .map(([key, value]) => `export ${key}=${shellQuote(value)}`)
