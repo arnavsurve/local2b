@@ -89,6 +89,7 @@ A command reference trims one trailing newline and fails on empty output. Tools 
 | `image` | provider default | Base image override |
 | `secrets` | `[]` | Sources pushed into every box. See Secret sources |
 | `gitHost` | `{ "type": "github" }` | See Git hosts |
+| `gitIdentity` | local `git config --global` | `{ "name": "...", "email": "..." }` set as the global git author in every box by `up` and `run`. Skipped when neither this nor the local values are set |
 | `idle.minutes` | `15` | Idle time before a box expires |
 | `idle.action` | `"kill"` | `kill` discards the box; `pause` keeps disk and memory |
 | `clone.strategy` | `"mirror"` | `mirror`: bare mirror plus a worktree checkout. `plain`: an ordinary clone |

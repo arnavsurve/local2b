@@ -1,7 +1,10 @@
 import { beforeAll, expect, test } from 'bun:test';
 import { $ } from 'bun';
+import { mkdtemp } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { gitHostSchema, resolveGitHost } from './git-host';
-import { ENV_FILE, plainEnvFile, pushCreds, pushEnv } from './session';
+import { ENV_FILE, plainEnvFile, gitIdentityCommand, pushCreds, pushEnv, resolveGitIdentity } from './session';
 import { fakeContext } from './test/fake-provider';
 
 beforeAll(() => {
@@ -32,4 +35,31 @@ test('a secret source wins over a plain env var of the same name', async () => {
   await pushCreds({ box, host: resolveGitHost(gitHostSchema.parse({ type: 'github' })), sources: [{ type: 'env', names: ['L2B_TEST_SECRET'] }] });
   const content = `${files.get(plainEnvFile({ homeDir: '/home/user' })) ?? ''}${files.get(ENV_FILE) ?? ''}`;
   expect(await sourcedEnv({ content, name: 'L2B_TEST_SECRET' })).toBe('from-source');
+});
+
+test('the box git identity comes from the local global git config and lets git commit', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'l2b-ident-'));
+  const globalConfig = join(dir, 'gitconfig');
+  await $`git config --file ${globalConfig} user.name ${"Ada O'Neil"}`.quiet();
+  await $`git config --file ${globalConfig} user.email ada@example.com`.quiet();
+  const saved = process.env.GIT_CONFIG_GLOBAL;
+  process.env.GIT_CONFIG_GLOBAL = globalConfig;
+  try {
+    expect(await resolveGitIdentity({ override: null })).toEqual({ name: "Ada O'Neil", email: 'ada@example.com' });
+    process.env.GIT_CONFIG_GLOBAL = join(dir, 'missing');
+    expect(await resolveGitIdentity({ override: null })).toBeNull();
+    expect(await resolveGitIdentity({ override: { name: 'o', email: 'o@x' } })).toEqual({ name: 'o', email: 'o@x' });
+  } finally {
+    if (saved === undefined) delete process.env.GIT_CONFIG_GLOBAL;
+    else process.env.GIT_CONFIG_GLOBAL = saved;
+  }
+
+  const home = join(dir, 'home');
+  const repo = join(dir, 'repo');
+  await $`mkdir -p ${home} ${repo}`.quiet();
+  const env = { PATH: process.env.PATH ?? '', HOME: home };
+  await $`bash -c ${gitIdentityCommand({ identity: { name: "Ada O'Neil", email: 'ada@example.com' } })}`.env(env).quiet();
+  await $`git init -q ${repo}`.env(env).quiet();
+  await $`git -C ${repo} commit -q --allow-empty -m x`.env(env).quiet();
+  expect((await $`git -C ${repo} log -1 --format=%an,%ae`.env(env).quiet()).text().trim()).toBe("Ada O'Neil,ada@example.com");
 });
