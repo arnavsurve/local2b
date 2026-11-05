@@ -1,5 +1,5 @@
 import { credentialHelperCommand, resolveHostToken, type ResolvedGitHost } from '../git-host';
-import type { GitIdentity } from '../providers/types';
+import type { Credentials, GitCredentials, GitIdentity } from '../providers/types';
 import type { Machine } from './machine';
 import { shellQuote } from '../shell';
 import {
@@ -43,16 +43,24 @@ export async function pushCreds({
   const vars: Record<string, string> = {};
   for (const source of sources) Object.assign(vars, await loadSecrets(source));
   vars[host.tokenEnvVar] = await resolveHostToken(host);
+  await writeSecretsFile({ box, vars });
+}
+
+/**
+ * Writes resolved credentials to the sandbox's tmpfs, never to its disk, and
+ * never through a command line.
+ */
+export async function writeCredentials({ box, credentials }: { box: Machine; credentials: Credentials }) {
+  await writeSecretsFile({ box, vars: credentials.variables });
+}
+
+async function writeSecretsFile({ box, vars }: { box: Machine; vars: Record<string, string> }) {
   // /dev/shm is sticky and world-writable, so with fs.protected_regular a
   // file-API write (often a different uid) cannot reopen an existing file
   // owned by the box user. Removing it first lets a refresh recreate it.
   await box.exec({ cmd: `rm -f ${ENV_FILE}`, cwd: '/', onOutput: () => {} });
   await box.writeFile({ path: ENV_FILE, content: toEnvFile(vars) });
-  await box.exec({
-    cmd: `chmod 600 ${ENV_FILE}`,
-    cwd: '/',
-    onOutput: () => {},
-  });
+  await box.exec({ cmd: `chmod 600 ${ENV_FILE}`, cwd: '/', onOutput: () => {} });
 }
 
 /**
@@ -69,7 +77,7 @@ export async function pushEnv({
   await box.writeFile({ path: plainEnvFile({ homeDir: box.homeDir }), content: toEnvFile(env) });
 }
 
-export async function configureGit({ box, host }: { box: Machine; host: ResolvedGitHost }) {
+export async function configureGit({ box, host }: { box: Machine; host: GitCredentials }) {
   await run({ box, cmd: credentialHelperCommand(host), cwd: '/' });
 }
 

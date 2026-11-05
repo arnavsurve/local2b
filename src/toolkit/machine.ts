@@ -63,7 +63,8 @@ export type MachineHost = {
   homeDir: string;
   /** Image used when the user does not pick one. */
   defaultImage: string;
-  create(opts: { name: string; image: string; workdir: string }): Promise<Machine>;
+  /** `idle` overrides the host's default idle window for this machine; null keeps the default. */
+  create(opts: { name: string; image: string; workdir: string; idle: { minutes: number } | null }): Promise<Machine>;
   connect(opts: { name: string }): Promise<Machine>;
   list(): Promise<MachineSummary[]>;
   exists(opts: { name: string }): Promise<boolean>;

@@ -4,7 +4,7 @@ import { putFile, remotePath } from './files';
 
 const box = async () => {
   const fake = fakeContext({ execExitCode: 0, failExecWhen: null, homeDir: '/home/user' });
-  await fake.ctx.provider.create({ name: 'b', image: 'i', workdir: '/home/user/repo' });
+  await fake.ctx.provider.create({ name: 'b', image: 'i', workdir: '/home/user/repo', idle: null });
   return { ...fake, box: await fake.ctx.provider.connect({ name: 'b' }) };
 };
 

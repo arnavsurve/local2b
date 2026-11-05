@@ -62,6 +62,7 @@ export const bake: Command = async ({ ctx: base, args }) => {
     name: bakeName,
     image: resolveImage({ ctx, override: values.image ?? null }),
     workdir: ctx.provider.homeDir,
+    idle: null,
   });
   await pushCreds({
     box,

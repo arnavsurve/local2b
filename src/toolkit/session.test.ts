@@ -19,7 +19,7 @@ async function sourcedEnv({ content, name }: { content: string; name: string }) 
 
 test('repo env vars are exported alongside the credentials', async () => {
   const { ctx, files } = fakeContext({ execExitCode: 0, failExecWhen: null, homeDir: '/home/user' });
-  const box = await ctx.provider.create({ name: 'b', image: 'i', workdir: '/w' });
+  const box = await ctx.provider.create({ name: 'b', image: 'i', workdir: '/w', idle: null });
   await pushEnv({ box, env: { NO_DOPPLER_WRAP: '1' } });
   await pushCreds({ box, host: resolveGitHost(gitHostSchema.parse({ type: 'github' })), sources: [{ type: 'env', names: ['L2B_TEST_SECRET'] }] });
   const content = `${files.get(plainEnvFile({ homeDir: '/home/user' })) ?? ''}${files.get(ENV_FILE) ?? ''}`;
@@ -30,7 +30,7 @@ test('repo env vars are exported alongside the credentials', async () => {
 
 test('a secret source wins over a plain env var of the same name', async () => {
   const { ctx, files } = fakeContext({ execExitCode: 0, failExecWhen: null, homeDir: '/home/user' });
-  const box = await ctx.provider.create({ name: 'b', image: 'i', workdir: '/w' });
+  const box = await ctx.provider.create({ name: 'b', image: 'i', workdir: '/w', idle: null });
   await pushEnv({ box, env: { L2B_TEST_SECRET: 'plain' } });
   await pushCreds({ box, host: resolveGitHost(gitHostSchema.parse({ type: 'github' })), sources: [{ type: 'env', names: ['L2B_TEST_SECRET'] }] });
   const content = `${files.get(plainEnvFile({ homeDir: '/home/user' })) ?? ''}${files.get(ENV_FILE) ?? ''}`;

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { GitCredentials } from './providers/types';
 import type { Config } from './config';
 import { resolveValue, valueRefSchema, type ValueRef } from './secrets';
 import { shellQuote } from './shell';
@@ -111,7 +112,7 @@ export function remoteUrl({ host, repo }: { host: ResolvedGitHost; repo: string 
 }
 
 /** Scoped to the host's origin so the token is never offered to other remotes. */
-export function credentialHelperCommand(host: ResolvedGitHost) {
+export function credentialHelperCommand(host: GitCredentials) {
   const origin = new URL(host.baseUrl).origin;
   const helper = `!f() { echo username=${host.username}; echo password=$${host.tokenEnvVar}; }; f`;
   return `git config --global ${shellQuote(`credential.${origin}.helper`)} ${shellQuote(helper)}`;

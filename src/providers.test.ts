@@ -73,7 +73,7 @@ test('a bake on one provider leaves the other provider without a snapshot or bak
 
 async function seedBox({ ctx, id, name }: { ctx: ReturnType<typeof context>['ctx']; id: string; name: string }) {
   const provider = ctx.providers.find((p) => p.id === id);
-  await provider?.create({ name, image: 'i', workdir: '/w' });
+  await provider?.create({ name, image: 'i', workdir: '/w', idle: null });
 }
 
 test('a box on one provider is found without a flag', async () => {

@@ -128,16 +128,6 @@ export function describeProviderContract({
       });
     }, timeoutMs);
 
-    test('a branch missing on the remote is created from the default branch', async () => {
-      const branch = uniqueName('l2b-contract-new');
-      await withBox({
-        branch,
-        useRepo: 'repo',
-        value: canary,
-        run: (box) => expectCheckoutOf({ box, branch, ref: 'HEAD' }),
-      });
-    }, timeoutMs);
-
     test('a box without a repo runs commands in its workdir', async () => {
       await withBox({
         branch: null,
@@ -272,27 +262,31 @@ export function describeProviderContract({
       expect(await subject.findPersisted({ value: secret })).toEqual([]);
     }, timeoutMs);
 
-    test('a bake records its time and later starts use it', async () => {
+    test('a bake records its time, and later starts use it, creating a branch missing on the remote', async () => {
       expect(await subject.provider.bakedAt({ repo: { ...repo(), name: uniqueName('never-baked') } })).toBeNull();
       const result = await subject.provider.bake({ repo: repo(), credentials: credentials({ value: canary }), image: null });
       expect(result.summary).not.toBe('');
       const bakedAt = await subject.provider.bakedAt({ repo: repo() });
       expect(bakedAt?.getTime()).toBe(result.bakedAt.getTime());
-      const box = await subject.provider.start({
-        name: uniqueName('contract'),
-        repo: repo(),
-        branch: subject.branch,
-        source: 'bake',
-        image: null,
-        idle: subject.idle,
-        credentials: credentials({ value: canary }),
-        gitIdentity: null,
-      });
-      try {
-        await expectCheckoutOf({ box, branch: subject.branch, ref: `refs/heads/${subject.branch}` });
-      } finally {
-        await box.destroy();
-      }
+      const fromBake = async ({ branch, ref }: { branch: string; ref: string }) => {
+        const box = await subject.provider.start({
+          name: uniqueName('contract'),
+          repo: repo(),
+          branch,
+          source: 'bake',
+          image: null,
+          idle: subject.idle,
+          credentials: credentials({ value: canary }),
+          gitIdentity: null,
+        });
+        try {
+          await expectCheckoutOf({ box, branch, ref });
+        } finally {
+          await box.destroy();
+        }
+      };
+      await fromBake({ branch: subject.branch, ref: `refs/heads/${subject.branch}` });
+      await fromBake({ branch: uniqueName('l2b-contract-new'), ref: 'HEAD' });
     }, timeoutMs);
 
     const runOnce = ({ cmd, onOutput }: { cmd: string; onOutput: (o: ExecOutput) => void }) => {
