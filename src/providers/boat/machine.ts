@@ -129,7 +129,7 @@ export type BoatHosts = {
 const RATE_LIMIT_RETRIES = 3;
 const RATE_LIMIT_MAX_WAIT_S = 70;
 
-/** Retries a start that boat refuses with 429, after the wait boat asks for. */
+/** Retries a start that boat refuses with 429 when the wait boat asks for is short (its per-minute limit). */
 async function retryStarts<T>(call: () => Promise<T>): Promise<T> {
   for (let attempt = 0; ; attempt++) {
     try {
@@ -137,7 +137,8 @@ async function retryStarts<T>(call: () => Promise<T>): Promise<T> {
     } catch (err) {
       const cause = err instanceof Error && 'cause' in err ? err.cause : err;
       if (!(cause instanceof ResponseError) || cause.response.status !== 429 || attempt >= RATE_LIMIT_RETRIES) throw err;
-      const wait = Math.min(RATE_LIMIT_MAX_WAIT_S, Number(cause.response.headers.get('retry-after')) || 30);
+      const wait = Number(cause.response.headers.get('retry-after')) || 30;
+      if (wait > RATE_LIMIT_MAX_WAIT_S) throw err;
       step(`boat start limit reached, retrying in ${wait}s`);
       await Bun.sleep(wait * 1000);
     }
