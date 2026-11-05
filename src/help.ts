@@ -44,9 +44,22 @@ export const COMMAND_HELP = {
     ],
   },
   exec: {
-    usage: 'l2b exec <name> [--cwd dir] -- <cmd...>',
+    usage: 'l2b exec <name> [--cwd dir] [--detach] -- <cmd...>',
     summary: 'run a command in the box (default cwd: the repo checkout)',
-    flags: [['--cwd dir', 'working directory in the box']],
+    flags: [
+      ['--cwd dir', 'working directory in the box'],
+      ['--detach', 'start the command in the background and print a job id'],
+    ],
+  },
+  logs: {
+    usage: 'l2b logs <name> <job> [--follow]',
+    summary: "a detached job's output and status (running or exited N)",
+    flags: [['--follow, -f', "stream until the job ends; exits with the job's exit code"]],
+  },
+  jobs: {
+    usage: 'l2b jobs <name>',
+    summary: "a box's detached jobs and their status",
+    flags: [],
   },
   put: {
     usage: 'l2b put <name> <local|-> <remote>',

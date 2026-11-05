@@ -46,6 +46,17 @@ Use these when you need several commands against the same checkout (debugging, e
 - A `--branch` that does not exist on the remote is created from the default branch.
 - The repo is checked out at `/home/user/<repo>`; `exec` runs there unless you pass `--cwd`.
 
+## Long commands: `--detach`
+
+A plain `exec` blocks until the command ends, so a long job (a full test suite) can hit your tool-call timeout. Start it detached instead:
+
+    l2b exec <name> --detach -- yarn test      # prints a job id immediately
+    l2b logs <name> <job>                      # output so far, then "running" or "exited N" on stderr
+    l2b logs <name> <job> --follow             # stream until done; exits with the job's exit code
+    l2b jobs <name>                            # all jobs and their status
+
+Do not `sleep` and poll by hand. If `--follow` itself would exceed your timeout, call `logs` again. Calling `logs` or `jobs` also keeps the box from expiring.
+
 ## Getting your work out
 
 Boxes are disposable. Commit and push a branch from inside the box when you are done:
