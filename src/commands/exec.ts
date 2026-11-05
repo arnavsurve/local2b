@@ -4,7 +4,7 @@ import type { Command } from '../context';
 import { connectBox } from '../find-box';
 import { COMMAND_HELP, usageError } from '../help';
 import { startJob } from '../jobs';
-import { run } from '../session';
+import { run } from '../toolkit/session';
 
 export const exec: Command = async ({ ctx, args }) => {
   const { head, tail } = splitOnDoubleDash(args);

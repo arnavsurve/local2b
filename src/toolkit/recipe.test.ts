@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { DEFAULT_FEATURES, aptPackageList, globalInstallCommands, rootCommands } from './image';
+import { DEFAULT_FEATURES, aptPackageList, globalInstallCommands, rootCommands } from './recipe';
 
 const TODAYS_APT_PACKAGES = [
   'git',

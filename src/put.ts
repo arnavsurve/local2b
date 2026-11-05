@@ -1,27 +1,8 @@
 import { readFileSync, statSync } from 'node:fs';
 import type { Machine } from './toolkit/machine';
-import { CommandFailedError } from './session';
-import { parentDir, shellQuote } from './shell';
+import { putFile } from './toolkit/files';
 
-/** Relative paths resolve against the box workdir; `~/` against the home directory. */
-export function remotePath({ box, path }: { box: Pick<Machine, 'workdir' | 'homeDir'>; path: string }) {
-  if (path.startsWith('/')) return path;
-  if (path.startsWith('~/')) return `${box.homeDir}/${path.slice(2)}`;
-  return `${box.workdir}/${path}`;
-}
-
-async function plainExec({ box, cmd }: { box: Machine; cmd: string }) {
-  const exitCode = await box.exec({
-    cmd,
-    cwd: '/',
-    onOutput: ({ data }) => {
-      process.stderr.write(data);
-    },
-  });
-  if (exitCode !== 0) throw new CommandFailedError(cmd, exitCode);
-}
-
-export async function putContent({
+export function putContent({
   box,
   content,
   executable,
@@ -32,15 +13,7 @@ export async function putContent({
   executable: boolean;
   remote: string;
 }) {
-  const path = remotePath({ box, path: remote });
-  const dir = parentDir(path) || '/';
-  // An existing file in a sticky world-writable dir (/tmp, /dev/shm) can't be
-  // reopened for writing by the provider's file API under fs.protected_regular,
-  // even when the box user owns it; a fresh file can be created.
-  await plainExec({ box, cmd: `mkdir -p ${shellQuote(dir)} && rm -f ${shellQuote(path)}` });
-  await box.writeFile({ path, content });
-  if (executable) await plainExec({ box, cmd: `chmod +x ${shellQuote(path)}` });
-  return path;
+  return putFile({ box, path: remote, content, executable });
 }
 
 export function decodeText({ bytes, what }: { bytes: Uint8Array; what: string }) {

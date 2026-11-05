@@ -1,4 +1,4 @@
-import type { Machine } from './toolkit/machine';
+import type { Machine } from './machine';
 
 export type DetectedInstall = { command: string; reason: string };
 

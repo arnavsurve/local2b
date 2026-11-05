@@ -1,8 +1,8 @@
 import { beforeAll, expect, test } from 'bun:test';
 import { configSchema } from './config';
 import { provisionBox } from './provision';
-import { plainEnvFile } from './session';
-import { snapshotName } from './repo';
+import { plainEnvFile } from './toolkit/session';
+import { snapshotName } from './toolkit/layout';
 import { fakeContext } from './test/fake-machine';
 
 const opts = {

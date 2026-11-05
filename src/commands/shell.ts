@@ -3,7 +3,7 @@ import { requirePositional } from '../args';
 import type { Command } from '../context';
 import { COMMAND_HELP } from '../help';
 import { connectBox } from '../find-box';
-import { withEnv } from '../session';
+import { withEnv } from '../toolkit/session';
 
 /** Interactive terminal in the box. Needs a real TTY on both stdin and stdout. */
 export const shell: Command = async ({ ctx, args }) => {

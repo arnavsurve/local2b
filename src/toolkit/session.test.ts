@@ -3,9 +3,9 @@ import { $ } from 'bun';
 import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { gitHostSchema, resolveGitHost } from './git-host';
-import { ENV_FILE, plainEnvFile, gitIdentityCommand, pushCreds, pushEnv, resolveGitIdentity } from './session';
-import { fakeContext } from './test/fake-machine';
+import { gitHostSchema, resolveGitHost } from '../git-host';
+import { ENV_FILE, plainEnvFile, gitIdentityCommand, pushCreds, pushEnv } from './session';
+import { fakeContext } from '../test/fake-machine';
 
 beforeAll(() => {
   process.env.GH_TOKEN = 'gh-test-token';
@@ -37,23 +37,8 @@ test('a secret source wins over a plain env var of the same name', async () => {
   expect(await sourcedEnv({ content, name: 'L2B_TEST_SECRET' })).toBe('from-source');
 });
 
-test('the box git identity comes from the local global git config and lets git commit', async () => {
+test('the identity command sets a global author that git commits with', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'l2b-ident-'));
-  const globalConfig = join(dir, 'gitconfig');
-  await $`git config --file ${globalConfig} user.name ${"Ada O'Neil"}`.quiet();
-  await $`git config --file ${globalConfig} user.email ada@example.com`.quiet();
-  const saved = process.env.GIT_CONFIG_GLOBAL;
-  process.env.GIT_CONFIG_GLOBAL = globalConfig;
-  try {
-    expect(await resolveGitIdentity({ override: null })).toEqual({ name: "Ada O'Neil", email: 'ada@example.com' });
-    process.env.GIT_CONFIG_GLOBAL = join(dir, 'missing');
-    expect(await resolveGitIdentity({ override: null })).toBeNull();
-    expect(await resolveGitIdentity({ override: { name: 'o', email: 'o@x' } })).toEqual({ name: 'o', email: 'o@x' });
-  } finally {
-    if (saved === undefined) delete process.env.GIT_CONFIG_GLOBAL;
-    else process.env.GIT_CONFIG_GLOBAL = saved;
-  }
-
   const home = join(dir, 'home');
   const repo = join(dir, 'repo');
   await $`mkdir -p ${home} ${repo}`.quiet();

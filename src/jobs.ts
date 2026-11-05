@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import type { Machine } from './toolkit/machine';
-import { withEnv } from './session';
+import { withEnv } from './toolkit/session';
 import { shellQuote } from './shell';
 
 export type JobStatus = { state: 'running' } | { state: 'exited'; exitCode: number };
