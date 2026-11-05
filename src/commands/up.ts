@@ -1,6 +1,7 @@
 import { parseArgs } from 'node:util';
 import { requirePositional } from '../args';
 import { selectForRepo, type Command } from '../context';
+import { COMMAND_HELP } from '../help';
 import { provisionBox } from '../provision';
 
 export const up: Command = async ({ ctx: base, args }) => {
@@ -16,7 +17,7 @@ export const up: Command = async ({ ctx: base, args }) => {
       install: { type: 'string' },
     },
   });
-  const name = requirePositional({ positionals, index: 0, usage: 'l2b up <name>' });
+  const name = requirePositional({ positionals, index: 0, usage: COMMAND_HELP.up.usage });
   const ctx = selectForRepo({ ctx: base, repo: values.repo ?? null });
   const box = await provisionBox({
     ctx,

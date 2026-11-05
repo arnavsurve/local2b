@@ -11,28 +11,11 @@ import { install } from './commands/install';
 import { up } from './commands/up';
 import { url } from './commands/url';
 import { createContext, type Command } from './context';
+import { commandHelp, isCommandName, rootHelp, wantsHelp, type CommandName } from './help';
 import { extractProviderFlag } from './providers/select';
 import { CommandFailedError } from './session';
 
-const USAGE = `l2b - remote dev sandboxes
-
-  l2b run [--repo o/r] [--branch b] [--keep] -- <cmd...>  one-shot: box up, run, box destroyed (exit code passes through)
-  l2b up <name> [--repo owner/repo] [--branch b] [--full] [--doppler project/config] [--image ref]
-  l2b bake <owner/repo> [--if-older-than 12h]  build the per-repo snapshot (bare mirror + warm install)
-  l2b exec <name> [--cwd dir] -- <cmd...>      run a command (default cwd: the repo checkout)
-  l2b creds <name> [--doppler project/config]  refresh GH token + doppler secrets
-  l2b shell <name> [--cwd dir]                 interactive terminal (needs a TTY)
-  l2b install                                  put l2b on PATH and link the agent skill
-  l2b url <name> <port>                        public URL for a port
-  l2b image build                              build the base image for the configured provider
-  l2b ls                                       boxes on every configured provider
-  l2b pause <name>
-  l2b down <name>
-
-  --provider <id> (any command) picks the provider; also L2B_PROVIDER and repos.<o/r>.provider in the config
-`;
-
-const commands: Record<string, Command> = {
+const commands: Record<CommandName, Command> = {
   run,
   up,
   image,
@@ -50,13 +33,21 @@ const commands: Record<string, Command> = {
 async function main() {
   const { providerId, args: argv } = extractProviderFlag({ args: process.argv.slice(2) });
   const [name, ...args] = argv;
-  const handler = name ? commands[name] : undefined;
-  if (!handler) {
-    console.log(USAGE);
-    process.exitCode = name ? 1 : 0;
+  if (!name || name === '--help' || name === '-h') {
+    console.log(rootHelp());
     return;
   }
-  await handler({ ctx: await createContext({ flag: providerId }), args });
+  if (!isCommandName(name)) {
+    console.error(`l2b: unknown command '${name}'\n`);
+    console.error(rootHelp());
+    process.exitCode = 1;
+    return;
+  }
+  if (wantsHelp({ args })) {
+    console.log(commandHelp(name));
+    return;
+  }
+  await commands[name]({ ctx: await createContext({ flag: providerId }), args });
 }
 
 main().catch((err) => {
