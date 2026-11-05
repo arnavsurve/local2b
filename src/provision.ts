@@ -9,7 +9,6 @@ import { step } from './progress';
 import type { Box } from './providers/types';
 import { checkoutDir, mirrorDir } from './repo';
 import { configureGit, pushCreds, pushEnv, runChecked } from './session';
-import { HOME } from './shell';
 import { lookupSnapshot, staleSnapshotHint } from './snapshots';
 import { secretSourcesFor, resolveImage } from './sources';
 
@@ -36,13 +35,13 @@ async function checkoutFromSnapshot({
   install: string | null;
   depth: number;
 }) {
-  const dir = checkoutDir(repo);
+  const dir = checkoutDir({ homeDir: box.homeDir, repo });
   step(`checking out ${branch ?? 'the default branch'}`);
   await runChecked({
     box,
-    cwd: HOME,
+    cwd: box.homeDir,
     what: 'branch checkout',
-    cmd: switchScript({ mirror: mirrorDir(repo), dir, branch, depth }),
+    cmd: switchScript({ mirror: mirrorDir({ homeDir: box.homeDir, repo }), dir, branch, depth }),
   });
   if (!install) return;
   step(`installing dependencies: ${install}`);
@@ -66,9 +65,9 @@ async function checkoutFromClone({
   const clone = full ? fullCloneCommand : shallowCloneCommand;
   await runChecked({
     box,
-    cwd: HOME,
+    cwd: box.homeDir,
     what: 'git clone',
-    cmd: clone({ remote: remoteUrl({ host, repo }), dir: checkoutDir(repo), branch }),
+    cmd: clone({ remote: remoteUrl({ host, repo }), dir: checkoutDir({ homeDir: box.homeDir, repo }), branch }),
   });
 }
 
@@ -99,7 +98,9 @@ export async function provisionBox({
   }
   const image = snapshotId ?? resolveImage({ ctx, override: opts.image });
   const host = hostFor({ config: ctx.config, repo });
-  const workdir = repo ? checkoutDir(repo) : HOME;
+  const workdir = repo
+    ? checkoutDir({ homeDir: ctx.provider.homeDir, repo })
+    : ctx.provider.homeDir;
 
   step(`creating box "${name}"`);
   const box = await ctx.provider.create({ name, image, workdir });

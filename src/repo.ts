@@ -1,5 +1,3 @@
-import { HOME } from './shell';
-
 const OWNER_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?$/;
 const NAME_PATTERN = /^(?!\.{1,2}$)[A-Za-z0-9._-]+$/;
 
@@ -20,13 +18,14 @@ export function parseRepo(repo: string) {
 
 export const repoName = (repo: string) => parseRepo(repo).name;
 
-export const mirrorDir = (repo: string) => {
+export const mirrorDir = ({ homeDir, repo }: { homeDir: string; repo: string }) => {
   const { owner, name } = parseRepo(repo);
-  return `${HOME}/mirrors/${owner}/${name}.git`;
+  return `${homeDir}/mirrors/${owner}/${name}.git`;
 };
 
-/** Deliberately owner-independent: agents rely on /home/user/<name>. */
-export const checkoutDir = (repo: string) => `${HOME}/${repoName(repo)}`;
+/** Deliberately owner-independent: agents rely on <home>/<name>. */
+export const checkoutDir = ({ homeDir, repo }: { homeDir: string; repo: string }) =>
+  `${homeDir}/${repoName(repo)}`;
 
 const slug = (part: string) => part.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 

@@ -11,13 +11,13 @@ test('snapshot names are lowercased and sanitized to letters, digits and hyphens
 });
 
 test('mirror directories are unique per owner', () => {
-  expect(mirrorDir('acme/api')).not.toBe(mirrorDir('other/api'));
-  expect(mirrorDir('acme/api')).toEndWith('/mirrors/acme/api.git');
+  expect(mirrorDir({ homeDir: '/h', repo: 'acme/api' })).not.toBe(mirrorDir({ homeDir: '/h', repo: 'other/api' }));
+  expect(mirrorDir({ homeDir: '/h', repo: 'acme/api' })).toBe('/h/mirrors/acme/api.git');
 });
 
 test('the checkout path depends only on the repo name', () => {
-  expect(checkoutDir('acme/api')).toEndWith('/api');
-  expect(checkoutDir('acme/api')).toBe(checkoutDir('other/api'));
+  expect(checkoutDir({ homeDir: '/h', repo: 'acme/api' })).toBe('/h/api');
+  expect(checkoutDir({ homeDir: '/h', repo: 'acme/api' })).toBe(checkoutDir({ homeDir: '/h', repo: 'other/api' }));
   expect(repoName('acme/api')).toBe('api');
 });
 

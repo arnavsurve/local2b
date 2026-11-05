@@ -12,6 +12,8 @@ export type Shell = {
 /** A running sandbox. Everything the CLI needs from a provider goes through here. */
 export type Box = {
   id: string;
+  /** The box user's home directory. */
+  homeDir: string;
   /** Directory commands run in when no `--cwd` is given. */
   workdir: string;
   exec(opts: {
@@ -51,6 +53,8 @@ export type BoxSummary = {
  */
 export type Provider = {
   id: string;
+  /** Home directory of the user inside this provider's boxes. */
+  homeDir: string;
   /** Image used when the user does not pick one. */
   defaultImage: string;
   create(opts: { name: string; image: string; workdir: string }): Promise<Box>;
