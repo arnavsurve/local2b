@@ -8,7 +8,8 @@ type FakeFailure = 'auth' | 'network' | null;
  * In-memory provider standing in for the remote edge (the one boundary we
  * don't own). Tests assert on which boxes are still alive afterwards.
  * `failure` makes every provider call fail the way a missing key or an
- * unreachable API would.
+ * unreachable API would. Capabilities start out like a full-featured provider;
+ * tests reassign `provider.capabilities` to exercise degraded ones.
  */
 export function fakeProvider({
   id,
@@ -64,6 +65,7 @@ export function fakeProvider({
 
   const provider: Provider = {
     id,
+    capabilities: { pause: 'memory', maxLifetimeMs: null, shell: 'pty', snapshotLookup: 'provider' },
     homeDir,
     defaultImage: 'fake-image',
     async create({ name, workdir }) {

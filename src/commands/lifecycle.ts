@@ -1,10 +1,13 @@
 import { requirePositional } from '../args';
 import type { Command } from '../context';
-import { connectBox } from '../find-box';
+import { requirePause } from '../capabilities';
+import { connectBox, findBoxProvider } from '../find-box';
 
 export const pause: Command = async ({ ctx, args }) => {
   const name = requirePositional({ positionals: args, index: 0, usage: 'l2b pause <name>' });
-  await (await connectBox({ ctx, name })).pause();
+  const provider = await findBoxProvider({ ctx, name });
+  requirePause({ provider, name });
+  await (await provider.connect({ name })).pause();
   console.log(`${name}: paused`);
 };
 

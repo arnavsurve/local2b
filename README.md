@@ -131,6 +131,13 @@ Each provider has its own config block with its own API key, such as `e2b` below
 
 `ls` lists boxes from every configured provider, with the provider id in the last column. A provider that fails prints one warning on stderr and the rest still list.
 
+Providers differ in what they support:
+
+- No pause: `idle.action: "pause"` fails at `up` and `run`, and `l2b pause` fails. Use `down`.
+- Pause to disk only: `up` notes that paused boxes keep their disk but not memory or processes.
+- No interactive shell: `l2b shell` fails. Use `exec`.
+- A hard lifetime cap under a day: `up` warns. Push work you want to keep.
+
 ### e2b
 
 Set `E2B_API_KEY`, or point `e2b.apiKey` at a value reference. Image settings apply on the next `l2b image build`.

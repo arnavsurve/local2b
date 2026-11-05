@@ -1,3 +1,4 @@
+import { boxPolicyNotes } from './capabilities';
 import type { Context } from './context';
 import { cloneCommand, switchScript } from './git-scripts';
 import { resolveClone, type CloneOptions } from './config';
@@ -117,6 +118,9 @@ export async function provisionBox({
   opts: ProvisionOpts;
 }) {
   const { name, repo, branch, full } = opts;
+  for (const note of boxPolicyNotes({ provider: ctx.provider, action: ctx.config.idle.action })) {
+    console.error(`l2b: ${note}`);
+  }
   step('looking for a baked snapshot');
   const snapshot = repo && !full ? await lookupSnapshot({ provider: ctx.provider, repo }) : null;
   const snapshotId = snapshot?.id ?? null;

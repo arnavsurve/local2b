@@ -30,10 +30,26 @@ export type Box = {
   }): Promise<Shell>;
   writeFile(opts: { path: string; content: string }): Promise<void>;
   publicUrl(opts: { port: number }): string;
+  /** Only called when `capabilities.pause` is non-null. */
   pause(): Promise<void>;
   destroy(): Promise<void>;
   /** Persists the filesystem only (no memory), returning a reference usable as an image. */
   snapshot(opts: { name: string }): Promise<string>;
+};
+
+/** What a provider can do. Core reads these to fail early or degrade instead of guessing. */
+export type Capabilities = {
+  /** What `pause` keeps. null: no pause, so `l2b pause` and `idle.action: "pause"` fail. */
+  pause: 'memory' | 'disk' | null;
+  /** Hard cap on a box's life that no keepalive can extend, or null. `up` warns when it is under a day. */
+  maxLifetimeMs: number | null;
+  /** 'pty': `Box.shell` streams a terminal. 'ssh': it hands back an ssh target. null: no shell. */
+  shell: 'pty' | 'ssh' | null;
+  /**
+   * 'provider': `findSnapshot` works from any machine.
+   * 'local': the provider can't list or name snapshots, so l2b keeps the ref in its state file.
+   */
+  snapshotLookup: 'provider' | 'local';
 };
 
 export type BoxSummary = {
@@ -53,6 +69,7 @@ export type BoxSummary = {
  */
 export type Provider = {
   id: string;
+  capabilities: Capabilities;
   /** Home directory of the user inside this provider's boxes. */
   homeDir: string;
   /** Image used when the user does not pick one. */

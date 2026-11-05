@@ -136,6 +136,7 @@ export function createE2bProvider({
 
   return {
     id: 'e2b',
+    capabilities: { pause: 'memory', maxLifetimeMs: null, shell: 'pty', snapshotLookup: 'provider' },
     homeDir: HOME_DIR,
     defaultImage: IMAGE_NAME,
 
