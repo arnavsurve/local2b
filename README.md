@@ -163,7 +163,7 @@ A box expires through boat's auto-stop deadline. l2b sets it to the idle window 
 
 Credentials go to the box over SSH stdin into `/dev/shm/l2b.env`. l2b authorizes a new key for each write, pins the host key boat reports, then revokes the key and deletes it locally. Secrets are never part of an API request, a command line or boat's file API. Boxes are created with monitoring off, so boat keeps no command history or output. boat writes the output of each command to `~/.ascii/processes/` on the box disk; a command that prints a secret leaves it there until the box is gone. Bake writes a `.boatignore` that keeps that folder out of the kept disk.
 
-`shell` runs `ssh -t`. `url` returns a token-gated URL; anyone with the full URL can open the port. `pause` is not supported.
+`shell` runs `ssh -t`. `url` returns a token-gated URL for a service listening on `0.0.0.0`; anyone with the full URL can open the port. `pause` is not supported.
 
 | Key | Default | Meaning |
 | --- | --- | --- |

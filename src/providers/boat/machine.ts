@@ -328,16 +328,17 @@ export function createBoatHosts({ config, idle }: { config: Config['boat']; idle
     async publicUrl({ name, port }) {
       const client = await api();
       const sandbox = await requireSandbox({ name });
-      // `localhost` relays to 127.0.0.1, which also reaches a service bound to 0.0.0.0.
-      const hosted = await boatCall({
-        what: 'host port',
-        call: () => client.hostPort({ sandboxId: sandbox.id, port, localhost: true }),
-      });
+      const hosted = await boatCall({ what: 'host port', call: () => client.hostPort({ sandboxId: sandbox.id, port }) });
       if (!hosted.url) throw new Error(`boat returned no URL for port ${port}`);
       const gated = hosted.url.includes('_token=');
       return {
         url: hosted.url,
-        note: gated ? 'the URL carries an access token; anyone who has it can open the port' : null,
+        note: [
+          gated ? 'the URL carries an access token; anyone who has it can open the port' : null,
+          'the service must listen on 0.0.0.0',
+        ]
+          .filter(Boolean)
+          .join('; '),
       };
     },
     async attach({ name, cwd }) {
