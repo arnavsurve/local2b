@@ -29,6 +29,7 @@ You need [Bun](https://bun.sh), an API key for your provider, and `gh` (or `GH_T
 - `run [--repo o/r] [--branch b] [--keep] -- <cmd...>`: one-shot. Create a box, run the command, destroy the box. Exit code passes through.
 - `up <name> [--repo o/r] [--branch b] [--full] [--doppler p/c] [--image ref]`: create a box and check out a branch.
 - `exec <name> [--cwd dir] -- <cmd...>`: run a command in a box. Defaults to the repo checkout.
+- `put <name> <local-path|-> <remote-path>`: send a text file into a box. Relative remote paths resolve against the box workdir. Parent directories are created and the exec bit is kept. `-` reads stdin. Use it instead of heredocs inside `exec`. Binary files are rejected.
 - `shell <name>`: interactive terminal (needs a TTY).
 - `down <name>`, `pause <name>`, `ls`: lifecycle.
 - `url <name> <port>`: public URL for a port.

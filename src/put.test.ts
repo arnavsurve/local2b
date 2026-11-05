@@ -1,0 +1,76 @@
+import { expect, test } from 'bun:test';
+import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { putContent, putLocalFile, remotePath } from './put';
+import { fakeContext } from './test/fake-provider';
+
+const box = async () => {
+  const fake = fakeContext({ execExitCode: 0, failExecWhen: null, homeDir: '/home/user' });
+  await fake.ctx.provider.create({ name: 'b', image: 'i', workdir: '/home/user/repo' });
+  return { ...fake, box: await fake.ctx.provider.connect({ name: 'b' }) };
+};
+
+test('remotePath resolves relative, home and absolute paths', () => {
+  const b = { workdir: '/w', homeDir: '/h' };
+  expect(remotePath({ box: b, path: 'a/b.txt' })).toBe('/w/a/b.txt');
+  expect(remotePath({ box: b, path: '~/x' })).toBe('/h/x');
+  expect(remotePath({ box: b, path: '/tmp/x' })).toBe('/tmp/x');
+});
+
+test('sends the file verbatim, creating parent dirs, without chmod for plain files', async () => {
+  const { box: b, files, executed } = await box();
+  const dir = mkdtempSync(join(tmpdir(), 'l2b-put-'));
+  try {
+    const local = join(dir, 'f.txt');
+    const content = "it's `tricky` $(whoami) \"x\"\nline2\n";
+    writeFileSync(local, content);
+    await putLocalFile({ box: b, localPath: local, remote: 'sub/dir/f.txt' });
+    expect(files.get('/home/user/sub/dir/f.txt')).toBe(content);
+    expect(executed).toEqual(["mkdir -p '/home/user/sub/dir' && rm -f '/home/user/sub/dir/f.txt'"]);
+  } finally {
+    rmSync(dir, { recursive: true });
+  }
+});
+
+test('preserves the exec bit', async () => {
+  const { box: b, executed } = await box();
+  const dir = mkdtempSync(join(tmpdir(), 'l2b-put-'));
+  try {
+    const local = join(dir, 's.sh');
+    writeFileSync(local, '#!/bin/sh\n');
+    chmodSync(local, 0o755);
+    await putLocalFile({ box: b, localPath: local, remote: '/tmp/s.sh' });
+    expect(executed).toEqual(["mkdir -p '/tmp' && rm -f '/tmp/s.sh'", "chmod +x '/tmp/s.sh'"]);
+  } finally {
+    rmSync(dir, { recursive: true });
+  }
+});
+
+test('removes the existing file before writing it', async () => {
+  const { box: b, executed } = await box();
+  const write = b.writeFile;
+  b.writeFile = async (args) => {
+    executed.push(`write ${args.path}`);
+    await write(args);
+  };
+  await putContent({ box: b, content: 'x', executable: false, remote: '/tmp/x' });
+  expect(executed).toEqual(["mkdir -p '/tmp' && rm -f '/tmp/x'", 'write /tmp/x']);
+});
+
+test('rejects binary files', async () => {
+  const { box: b } = await box();
+  const dir = mkdtempSync(join(tmpdir(), 'l2b-put-'));
+  try {
+    const local = join(dir, 'bin');
+    writeFileSync(local, new Uint8Array([0xff, 0xfe, 0x00, 0x80]));
+    await expect(putLocalFile({ box: b, localPath: local, remote: 'bin' })).rejects.toThrow('not valid UTF-8');
+  } finally {
+    rmSync(dir, { recursive: true });
+  }
+});
+
+test('errors when the local file is missing', async () => {
+  const { box: b } = await box();
+  await expect(putLocalFile({ box: b, localPath: '/nonexistent/zzz', remote: 'x' })).rejects.toThrow('cannot read');
+});

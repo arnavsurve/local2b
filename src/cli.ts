@@ -5,6 +5,7 @@ import { exec } from './commands/exec';
 import { down, pause } from './commands/lifecycle';
 import { image } from './commands/image';
 import { ls } from './commands/ls';
+import { put } from './commands/put';
 import { run } from './commands/run';
 import { shell } from './commands/shell';
 import { install } from './commands/install';
@@ -21,6 +22,7 @@ const commands: Record<CommandName, Command> = {
   image,
   bake,
   exec,
+  put,
   shell,
   install,
   creds,
