@@ -141,7 +141,7 @@ export function fakeMultiContext({
     repos: Object.fromEntries(
       Object.entries(repos).map(([repo, provider]) => [
         repo,
-        { provider, gitHost: null, baseBranch: null, install: null, warm: null, env: {} },
+        { provider, clone: {}, gitHost: null, baseBranch: null, install: null, warm: null, env: {} },
       ])
     ),
   };
