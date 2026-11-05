@@ -41,6 +41,10 @@ export async function pushCreds({
   const vars: Record<string, string> = {};
   for (const source of sources) Object.assign(vars, await loadSecrets(source));
   vars[host.tokenEnvVar] = await resolveHostToken(host);
+  // /dev/shm is sticky and world-writable, so with fs.protected_regular a
+  // file-API write (often a different uid) cannot reopen an existing file
+  // owned by the box user. Removing it first lets a refresh recreate it.
+  await box.exec({ cmd: `rm -f ${ENV_FILE}`, cwd: '/', onOutput: () => {} });
   await box.writeFile({ path: ENV_FILE, content: toEnvFile(vars) });
   await box.exec({
     cmd: `chmod 600 ${ENV_FILE}`,
