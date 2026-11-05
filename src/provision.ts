@@ -138,7 +138,7 @@ export async function provisionBox({
     : ctx.provider.homeDir;
 
   step(`creating box "${name}"`);
-  const box = await ctx.provider.create({ name, image, workdir });
+  const box = await ctx.provider.create({ name, image, workdir, idle: null });
   try {
     step('pushing credentials');
     await pushCreds({

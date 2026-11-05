@@ -8,7 +8,7 @@ import { fakeContext, withLocalShell } from './test/fake-machine';
 async function localBox() {
   const homeDir = mkdtempSync(join(tmpdir(), 'l2b-jobs-'));
   const { ctx } = fakeContext({ execExitCode: 0, failExecWhen: null, homeDir });
-  const base = await ctx.provider.create({ name: 'b', image: 'i', workdir: homeDir });
+  const base = await ctx.provider.create({ name: 'b', image: 'i', workdir: homeDir, idle: null });
   return withLocalShell({ box: base });
 }
 

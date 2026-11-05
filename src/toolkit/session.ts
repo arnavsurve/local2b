@@ -1,5 +1,5 @@
 import { credentialHelperCommand, resolveHostToken, type ResolvedGitHost } from '../git-host';
-import type { GitIdentity } from '../providers/types';
+import type { Credentials, GitCredentials, GitIdentity } from '../providers/types';
 import type { Machine } from './machine';
 import { shellQuote } from '../shell';
 import {
@@ -56,6 +56,19 @@ export async function pushCreds({
 }
 
 /**
+ * Writes resolved credentials to the sandbox's tmpfs, never to its disk, and
+ * never through a command line.
+ */
+export async function writeCredentials({ box, credentials }: { box: Machine; credentials: Credentials }) {
+  await box.writeFile({ path: ENV_FILE, content: toEnvFile(credentials.variables) });
+  await box.exec({
+    cmd: `chmod 600 ${ENV_FILE}`,
+    cwd: '/',
+    onOutput: () => {},
+  });
+}
+
+/**
  * Plain (non-secret) variables live on disk so they survive `creds` refreshes,
  * which only rewrite the tmpfs secrets file.
  */
@@ -69,7 +82,7 @@ export async function pushEnv({
   await box.writeFile({ path: plainEnvFile({ homeDir: box.homeDir }), content: toEnvFile(env) });
 }
 
-export async function configureGit({ box, host }: { box: Machine; host: ResolvedGitHost }) {
+export async function configureGit({ box, host }: { box: Machine; host: GitCredentials }) {
   await run({ box, cmd: credentialHelperCommand(host), cwd: '/' });
 }
 

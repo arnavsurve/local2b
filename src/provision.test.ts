@@ -26,7 +26,7 @@ test('a provider home dir drives the env file, mirror and checkout paths', async
     failExecWhen: null,
     homeDir,
   });
-  const baker = await ctx.provider.create({ name: 'baker', image: 'i', workdir: '/w' });
+  const baker = await ctx.provider.create({ name: 'baker', image: 'i', workdir: '/w', idle: null });
   await baker.snapshot({ name: snapshotName('o/widgets') });
   executed.length = 0;
   const box = await provisionBox({ ctx, opts });
@@ -80,7 +80,7 @@ async function context({ snapshot }: { snapshot: boolean }) {
   const fake = fakeContext({ execExitCode: 0, failExecWhen: null, homeDir: '/srv/dan' });
   fake.rootFiles.push('package.json', 'yarn.lock', '.yarnrc.yml', 'src');
   if (snapshot) {
-    const baker = await fake.ctx.provider.create({ name: 'baker', image: 'i', workdir: '/w' });
+    const baker = await fake.ctx.provider.create({ name: 'baker', image: 'i', workdir: '/w', idle: null });
     await baker.snapshot({ name: snapshotName('o/widgets') });
   }
   fake.executed.length = 0;

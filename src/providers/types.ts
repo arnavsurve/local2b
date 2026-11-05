@@ -62,7 +62,7 @@ export type StartOpts = {
   name: string;
   /** null: a box with no checkout, whose workdir is the box user's home. */
   repo: RepoSpec | null;
-  /** null: the remote's default branch. A branch missing on the remote is created from the default branch. */
+  /** null: the remote's default branch. Starting from a bake, a branch missing on the remote is created from the default branch. */
   branch: string | null;
   /** `bake`: start from the repo's bake when one exists. `fresh`: ignore any bake. */
   source: 'bake' | 'fresh';
