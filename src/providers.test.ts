@@ -8,8 +8,8 @@ import { run } from './commands/run';
 import { down } from './commands/lifecycle';
 import { url } from './commands/url';
 import { findBoxProvider } from './find-box';
-import { lookupSnapshot } from './snapshots';
-import { snapshotName } from './repo';
+import { lookupSnapshot } from './toolkit/bake-records';
+import { snapshotName } from './toolkit/layout';
 import { fakeMultiContext } from './test/fake-machine';
 
 let stateDir = '';

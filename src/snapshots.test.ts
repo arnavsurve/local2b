@@ -4,8 +4,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { bake } from './commands/bake';
 import { provisionBox } from './provision';
-import { snapshotName } from './repo';
-import { lookupSnapshot, recordBake } from './snapshots';
+import { snapshotName } from './toolkit/layout';
+import { lookupSnapshot, recordBake } from './toolkit/bake-records';
 import { fakeContext } from './test/fake-machine';
 
 const HOUR = 3_600_000;

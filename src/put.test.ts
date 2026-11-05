@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test';
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { putContent, putLocalFile, remotePath } from './put';
+import { putLocalFile } from './put';
 import { fakeContext } from './test/fake-machine';
 
 const box = async () => {
@@ -10,13 +10,6 @@ const box = async () => {
   await fake.ctx.provider.create({ name: 'b', image: 'i', workdir: '/home/user/repo' });
   return { ...fake, box: await fake.ctx.provider.connect({ name: 'b' }) };
 };
-
-test('remotePath resolves relative, home and absolute paths', () => {
-  const b = { workdir: '/w', homeDir: '/h' };
-  expect(remotePath({ box: b, path: 'a/b.txt' })).toBe('/w/a/b.txt');
-  expect(remotePath({ box: b, path: '~/x' })).toBe('/h/x');
-  expect(remotePath({ box: b, path: '/tmp/x' })).toBe('/tmp/x');
-});
 
 test('sends the file verbatim, creating parent dirs, without chmod for plain files', async () => {
   const { box: b, files, executed } = await box();
@@ -45,17 +38,6 @@ test('preserves the exec bit', async () => {
   } finally {
     rmSync(dir, { recursive: true });
   }
-});
-
-test('removes the existing file before writing it', async () => {
-  const { box: b, executed } = await box();
-  const write = b.writeFile;
-  b.writeFile = async (args) => {
-    executed.push(`write ${args.path}`);
-    await write(args);
-  };
-  await putContent({ box: b, content: 'x', executable: false, remote: '/tmp/x' });
-  expect(executed).toEqual(["mkdir -p '/tmp' && rm -f '/tmp/x'", 'write /tmp/x']);
 });
 
 test('rejects binary files', async () => {

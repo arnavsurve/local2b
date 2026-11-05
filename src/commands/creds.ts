@@ -4,7 +4,7 @@ import { hostFor } from '../git-host';
 import { COMMAND_HELP } from '../help';
 import type { Command } from '../context';
 import { connectBox } from '../find-box';
-import { pushCreds } from '../session';
+import { pushCreds } from '../toolkit/session';
 import { secretSourcesFor } from '../sources';
 
 export const creds: Command = async ({ ctx, args }) => {

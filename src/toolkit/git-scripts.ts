@@ -1,4 +1,4 @@
-import { parentDir, shellQuote } from './shell';
+import { parentDir, shellQuote } from '../shell';
 
 /**
  * Shell script builders for the git work done inside a sandbox. They are pure

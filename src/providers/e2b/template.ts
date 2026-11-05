@@ -1,5 +1,5 @@
 import { Template } from 'e2b';
-import { aptPackageList, rootCommands, type Feature } from './image';
+import { aptPackageList, rootCommands, type Feature } from '../../toolkit/recipe';
 
 /**
  * Tooling-only image. It holds no repo and no credentials, so it is safe to

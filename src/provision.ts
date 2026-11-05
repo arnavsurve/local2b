@@ -1,14 +1,16 @@
 import type { Context } from './context';
-import { cloneCommand, switchScript } from './git-scripts';
+import { cloneCommand, switchScript } from './toolkit/git-scripts';
 import { resolveClone, type CloneOptions } from './config';
 import { hostFor, remoteUrl, type ResolvedGitHost } from './git-host';
-import { describeInstall, resolveInstall } from './install';
+import { describeInstall, resolveInstall } from './toolkit/install';
 import { step } from './progress';
 import type { Machine } from './toolkit/machine';
-import { checkoutDir, mirrorDir } from './repo';
+import { checkoutDir, mirrorDir } from './toolkit/layout';
 import { shellQuote } from './shell';
-import { configureGit, configureGitIdentity, resolveGitIdentity, pushCreds, pushEnv, runChecked } from './session';
-import { lookupSnapshot, staleSnapshotHint } from './snapshots';
+import { resolveGitIdentity } from './git-identity';
+import { configureGit, configureGitIdentity, pushCreds, pushEnv, runChecked } from './toolkit/session';
+import { lookupSnapshot } from './toolkit/bake-records';
+import { staleSnapshotHint } from './snapshots';
 import { secretSourcesFor, resolveImage } from './sources';
 
 export type ProvisionOpts = {

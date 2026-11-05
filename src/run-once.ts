@@ -4,7 +4,7 @@ import type { ExecOutput, Provider, StartOpts } from './providers/types';
 import { provisionBox, type ProvisionOpts } from './provision';
 import { step } from './progress';
 import { repoName } from './repo';
-import { run } from './session';
+import { run } from './toolkit/session';
 
 export function generatedBoxName({ repo }: { repo: string | null }) {
   const slug = repo ? repoName(repo) : 'box';

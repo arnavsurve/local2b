@@ -1,7 +1,7 @@
 import { Sandbox, Template } from 'e2b';
 import { ProviderAuthError } from '../types';
 import type { IdlePolicy, Machine, MachineHost } from '../../toolkit/machine';
-import { withHeartbeat } from '../../keepalive';
+import { withHeartbeat } from '../../toolkit/keepalive';
 import type { Config } from '../../config';
 import { resolveValue, type ValueRef } from '../../secrets';
 import { devTemplate } from './template';

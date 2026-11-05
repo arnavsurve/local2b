@@ -1,10 +1,10 @@
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { z } from 'zod';
-import { DEFAULT_FEATURES, featureSchema } from './providers/e2b/image';
+import { DEFAULT_FEATURES, featureSchema } from './toolkit/recipe';
 import { gitHostSchema } from './git-host';
 import { PROVIDER_IDS } from './providers/ids';
-import { FILTER_PATTERN } from './git-scripts';
+import { FILTER_PATTERN } from './toolkit/git-scripts';
 import { secretSourceSchema, valueRefSchema } from './secrets';
 
 export const e2bConfigSchema = z

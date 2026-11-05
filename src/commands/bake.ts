@@ -3,14 +3,16 @@ import { requirePositional } from '../args';
 import { resolveClone } from '../config';
 import { hostFor, remoteUrl } from '../git-host';
 import { parseDuration } from '../duration';
-import { bakeScript } from '../git-scripts';
-import { checkoutDir, mirrorDir, repoName, snapshotName } from '../repo';
+import { bakeScript } from '../toolkit/git-scripts';
+import { repoName } from '../repo';
+import { checkoutDir, mirrorDir, snapshotName } from '../toolkit/layout';
 import { COMMAND_HELP } from '../help';
 import { selectForRepo, type Command } from '../context';
-import { describeInstall, resolveInstall } from '../install';
+import { describeInstall, resolveInstall } from '../toolkit/install';
 import { step } from '../progress';
-import { configureGit, pushCreds, pushEnv, runChecked, scrubCreds } from '../session';
-import { lookupSnapshot, formatAge, recordBake } from '../snapshots';
+import { configureGit, pushCreds, pushEnv, runChecked, scrubCreds } from '../toolkit/session';
+import { formatAge } from '../snapshots';
+import { lookupSnapshot, recordBake } from '../toolkit/bake-records';
 import { resolveImage, secretSourcesFor } from '../sources';
 
 /**
