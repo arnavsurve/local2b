@@ -163,3 +163,25 @@ export function fakeMultiContext({
   };
   return { ctx, fake };
 }
+
+/**
+ * A box whose `exec` runs the command in a real local bash, for testing code
+ * that builds shell scripts. `homeDir` should be a real temp dir.
+ */
+export function withLocalShell({ box }: { box: Box }): Box {
+  return {
+    ...box,
+    async exec({ cmd, cwd, onOutput }) {
+      const proc = Bun.spawn(['bash', '-c', cmd], { cwd, stdout: 'pipe', stderr: 'pipe' });
+      const pump = async (stream: 'stdout' | 'stderr', body: ReadableStream<Uint8Array>) => {
+        for await (const chunk of body) onOutput({ stream, data: Buffer.from(chunk).toString() });
+      };
+      const [code] = await Promise.all([
+        proc.exited,
+        pump('stdout', proc.stdout),
+        pump('stderr', proc.stderr),
+      ]);
+      return code;
+    },
+  };
+}

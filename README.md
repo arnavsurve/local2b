@@ -28,7 +28,9 @@ You need [Bun](https://bun.sh), an API key for your provider, and `gh` (or `GH_T
 
 - `run [--repo o/r] [--branch b] [--keep] -- <cmd...>`: one-shot. Create a box, run the command, destroy the box. Exit code passes through.
 - `up <name> [--repo o/r] [--branch b] [--full] [--doppler p/c] [--image ref]`: create a box and check out a branch.
-- `exec <name> [--cwd dir] -- <cmd...>`: run a command in a box. Defaults to the repo checkout.
+- `exec <name> [--cwd dir] [--detach] -- <cmd...>`: run a command in a box. Defaults to the repo checkout. With `--detach` the command starts in the background and `exec` prints a job id at once.
+- `logs <name> <job> [--follow]`: print a detached job's output and its status (`running` or `exited N`). With `--follow` it streams until the job ends and exits with the job's exit code.
+- `jobs <name>`: list a box's detached jobs with their status.
 - `put <name> <local-path|-> <remote-path>`: send a text file into a box. Relative remote paths resolve against the box workdir. Parent directories are created and the exec bit is kept. `-` reads stdin. Use it instead of heredocs inside `exec`. Binary files are rejected.
 - `shell <name>`: interactive terminal (needs a TTY).
 - `down <name>`, `pause <name>`, `ls`: lifecycle.
@@ -39,6 +41,8 @@ You need [Bun](https://bun.sh), an API key for your provider, and `gh` (or `GH_T
 - `install`: put `l2b` on PATH and link the agent skill.
 
 Use `run` for one-off work. Use `up`, `exec` and `down` when several commands need the same checkout, or you want a dev server behind a `url`.
+
+Detached jobs suit long commands such as full test suites, which would otherwise hit a tool-call timeout. Output and exit status are kept in `~/.l2b-jobs/<job>/` in the box (`log`, `status`). A job does not hold off box expiry by itself, so run `logs` or `jobs` now and then while it runs.
 
 ## How it works
 
