@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { $ } from 'bun';
-import { bakeScript, switchScript } from './git-scripts';
+import { bakeScript, cloneCommand, switchScript } from './git-scripts';
 
 let root: string;
 let origin: string;
@@ -103,7 +103,7 @@ test('a shallow mirror stays shallow but still switches to branches', async () =
 });
 
 test('bake script clones the base branch and chains install then warm-up', () => {
-  const base = { remote: 'https://github.com/o/r.git', mirror: '/m/r.git', checkout: '/seed', depth: 50 };
+  const base = { remote: 'https://github.com/o/r.git', mirror: '/m/r.git', checkout: '/seed', depth: 50, filter: 'blob:limit=50m' };
   const none = bakeScript({ ...base, install: null, warm: null, branch: null });
   expect(none).not.toContain('/seed &&');
   expect(none).not.toContain('--branch');
@@ -117,4 +117,117 @@ test('bake script clones the base branch and chains install then warm-up', () =>
   expect(full).toContain("--branch 'trunk'");
   expect(full).toContain(" 'https://github.com/o/r.git' '/m/r.git'");
   expect(full).toContain("cd '/seed' && yarn install && yarn gen");
+});
+
+test('default mirror scripts are byte-identical to the pre-configurable output', () => {
+  const base = {
+    remote: 'https://github.com/o/r.git',
+    mirror: '/m/o/r.git',
+    checkout: '/h/r',
+    depth: 50,
+    filter: 'blob:limit=50m',
+  };
+  expect(bakeScript({ ...base, install: 'yarn install', warm: 'yarn gen', branch: 'trunk' })).toBe(
+    "set -e\nmkdir -p '/m/o'\ngit clone --quiet --bare --depth=50 --filter=blob:limit=50m --branch 'trunk' 'https://github.com/o/r.git' '/m/o/r.git'\ngit -C '/m/o/r.git' config remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*'\ngit -C '/m/o/r.git' worktree add --quiet --detach '/h/r' HEAD\ncd '/h/r' && yarn install && yarn gen"
+  );
+  expect(bakeScript({ ...base, install: null, warm: null, branch: null })).toBe(
+    "set -e\nmkdir -p '/m/o'\ngit clone --quiet --bare --depth=50 --filter=blob:limit=50m  'https://github.com/o/r.git' '/m/o/r.git'\ngit -C '/m/o/r.git' config remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*'\ngit -C '/m/o/r.git' worktree add --quiet --detach '/h/r' HEAD"
+  );
+  expect(switchScript({ mirror: '/m/o/r.git', dir: '/h/r', branch: 'feat/x', depth: 50 })).toBe(
+    "set -e\nbase=$(git -C '/m/o/r.git' fetch --quiet --depth=50 origin HEAD && git -C '/m/o/r.git' rev-parse FETCH_HEAD)\nbranch='feat/x'\nif git -C '/m/o/r.git' fetch --quiet --depth=50 origin \"refs/heads/$branch:refs/remotes/origin/$branch\"; then start=\"origin/$branch\"; else start=\"$base\"; fi\ngit -C '/h/r' checkout --quiet -B \"$branch\" \"$start\""
+  );
+  expect(switchScript({ mirror: '/m/o/r.git', dir: '/h/r', branch: null, depth: 50 })).toBe(
+    "set -e\nbase=$(git -C '/m/o/r.git' fetch --quiet --depth=50 origin HEAD && git -C '/m/o/r.git' rev-parse FETCH_HEAD)\ngit -C '/h/r' checkout --quiet --detach \"$base\""
+  );
+});
+
+test('a null filter omits the flag and a null depth omits --depth', () => {
+  const none = cloneCommand({ remote: 'r', dir: '/d', branch: null, depth: null, filter: null });
+  expect(none).not.toContain('--filter');
+  expect(none).not.toContain('--depth');
+  const tree = cloneCommand({ remote: 'r', dir: '/d', branch: 'b', depth: 3, filter: 'blob:none' });
+  expect(tree).toContain('--depth=3 --filter=blob:none');
+});
+
+test('a filter with shell metacharacters is quoted rather than interpreted', async () => {
+  const marker = join(root, 'pwned');
+  const cmd = cloneCommand({
+    remote: `file://${origin}`,
+    dir: join(root, 'x'),
+    branch: null,
+    depth: null,
+    filter: `blob:none; touch ${marker}`,
+  });
+  await expect(runScript(cmd)).rejects.toThrow();
+  expect(await Bun.file(marker).exists()).toBe(false);
+});
+
+async function addCommits(n: number) {
+  for (let i = 1; i <= n; i++) {
+    await Bun.write(join(origin, `c${i}.txt`), `${i}\n`);
+    await git({ cwd: origin, args: ['add', '.'] });
+    await git({ cwd: origin, args: ['commit', '-qm', `c${i}`] });
+  }
+}
+
+async function bakePlain({ depth, filter }: { depth: number | null; filter: string | null }) {
+  const dir = join(root, 'plain');
+  await runScript(
+    bakeScript({
+      remote: `file://${origin}`,
+      mirror: null,
+      checkout: dir,
+      install: null,
+      warm: null,
+      branch: null,
+      depth,
+      filter,
+    })
+  );
+  return dir;
+}
+
+test('plain bake makes an ordinary clone with no mirror or worktree', async () => {
+  const dir = await bakePlain({ depth: 50, filter: null });
+  expect(await Bun.file(join(dir, 'a.txt')).text()).toBe('main\n');
+  expect(await git({ cwd: dir, args: ['rev-parse', '--git-dir'] })).toBe('.git');
+  expect(await git({ cwd: dir, args: ['rev-parse', '--is-bare-repository'] })).toBe('false');
+});
+
+test('plain strategy switches to an existing remote branch in place', async () => {
+  const dir = await bakePlain({ depth: 50, filter: null });
+  await runScript(switchScript({ mirror: null, dir, branch: 'feature/x', depth: 50 }));
+  expect(await Bun.file(join(dir, 'a.txt')).text()).toBe('feature\n');
+  expect(await git({ cwd: dir, args: ['branch', '--show-current'] })).toBe('feature/x');
+});
+
+test('plain strategy creates a new branch from the default branch', async () => {
+  const dir = await bakePlain({ depth: 50, filter: null });
+  await runScript(switchScript({ mirror: null, dir, branch: 'brand-new', depth: 50 }));
+  expect(await Bun.file(join(dir, 'a.txt')).text()).toBe('main\n');
+  expect(await git({ cwd: dir, args: ['branch', '--show-current'] })).toBe('brand-new');
+});
+
+test('plain strategy without a branch detaches at the latest default tip', async () => {
+  const dir = await bakePlain({ depth: 50, filter: null });
+  await addCommits(1);
+  await runScript(switchScript({ mirror: null, dir, branch: null, depth: 50 }));
+  expect(await Bun.file(join(dir, 'c1.txt')).text()).toBe('1\n');
+  expect(await git({ cwd: dir, args: ['branch', '--show-current'] })).toBe('');
+});
+
+test('depth null keeps full history and a number keeps it shallow', async () => {
+  await addCommits(4);
+  const full = await bakePlain({ depth: null, filter: null });
+  expect(await git({ cwd: full, args: ['rev-list', '--count', 'HEAD'] })).toBe('5');
+  rmSync(full, { recursive: true, force: true });
+  const shallow = await bakePlain({ depth: 2, filter: null });
+  expect(await git({ cwd: shallow, args: ['rev-list', '--count', 'HEAD'] })).toBe('2');
+});
+
+test('a partial-clone filter still lets a plain checkout switch branches', async () => {
+  await git({ cwd: origin, args: ['config', 'uploadpack.allowFilter', 'true'] });
+  const dir = await bakePlain({ depth: null, filter: 'blob:none' });
+  await runScript(switchScript({ mirror: null, dir, branch: 'feature/x', depth: null }));
+  expect(await Bun.file(join(dir, 'a.txt')).text()).toBe('feature\n');
 });

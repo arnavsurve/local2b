@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { DEFAULT_FEATURES, featureSchema } from './providers/e2b/image';
 import { gitHostSchema } from './git-host';
 import { PROVIDER_IDS } from './providers/ids';
+import { FILTER_PATTERN } from './git-scripts';
 import { secretSourceSchema, valueRefSchema } from './secrets';
 
 export const e2bConfigSchema = z
@@ -27,6 +28,22 @@ export const e2bConfigSchema = z
     path: ['features'],
   });
 
+const cloneFilterSchema = z
+  .string()
+  .regex(FILTER_PATTERN, 'must look like a git partial-clone filter, e.g. "blob:limit=50m"');
+
+/** Every field is optional so a repo's block overrides only what it sets. */
+const cloneSchema = z.object({
+  /** `mirror`: bare mirror plus a worktree checkout. `plain`: an ordinary clone. */
+  strategy: z.enum(['mirror', 'plain']).optional(),
+  /** Commits of history to keep; `null` for full history. */
+  depth: z.number().int().positive().nullable().optional(),
+  /** Git partial-clone filter; `null` for none. */
+  filter: cloneFilterSchema.nullable().optional(),
+});
+
+const CLONE_DEFAULTS = { strategy: 'mirror', depth: 50, filter: 'blob:limit=50m' } as const;
+
 const idleSchema = z.object({
   minutes: z.number().positive().default(15),
   /** `kill` discards the box; `pause` keeps its disk and memory (and secrets) around. */
@@ -39,8 +56,10 @@ const rawConfigSchema = z.object({
   image: z.string().nullable().default(null),
   /** Boxes expire this long after the last l2b activity against them. */
   idle: idleSchema.default(idleSchema.parse({})),
-  /** Commits of history kept in a baked mirror. */
-  cloneDepth: z.number().int().positive().default(50),
+  /** Kept for compatibility: the global default for `clone.depth`. */
+  cloneDepth: z.number().int().positive().optional(),
+  /** How repos are cloned; repos can override it. */
+  clone: cloneSchema.default({}),
   /** Git remote host and how to authenticate to it; repos can override it. */
   gitHost: gitHostSchema.prefault({ type: 'github' }),
   /** `up` and `run` hint to re-bake when the repo's snapshot is older than this. */
@@ -54,6 +73,8 @@ const rawConfigSchema = z.object({
       z.object({
         /** Provider used for this repo, ahead of the top-level `provider`. */
         provider: z.string().nullable().default(null),
+        /** Overrides the global `clone` settings field by field. */
+        clone: cloneSchema.default({}),
         /** Overrides the global `gitHost` for this repo. */
         gitHost: gitHostSchema.nullable().default(null),
         /** Branch the snapshot is baked from (the one you mostly work off), when it is not the repo's default branch. */
@@ -82,6 +103,27 @@ export const configSchema = rawConfigSchema.transform((raw) => ({
   configuredProviders: PROVIDER_IDS.filter((id) => id === raw.provider || raw[id] !== undefined),
 }));
 export type Config = z.infer<typeof configSchema>;
+
+export type CloneOptions = {
+  strategy: 'mirror' | 'plain';
+  depth: number | null;
+  filter: string | null;
+};
+
+/** Effective clone options for a repo: repo block, then global block, then `cloneDepth`, then defaults. */
+export function resolveClone({ config, repo }: { config: Config; repo: string }): CloneOptions {
+  const own = config.repos[repo]?.clone ?? {};
+  const global = config.clone;
+  return {
+    strategy: own.strategy ?? global.strategy ?? CLONE_DEFAULTS.strategy,
+    depth: own.depth !== undefined ? own.depth
+      : global.depth !== undefined ? global.depth
+      : (config.cloneDepth ?? CLONE_DEFAULTS.depth),
+    filter: own.filter !== undefined ? own.filter
+      : global.filter !== undefined ? global.filter
+      : CLONE_DEFAULTS.filter,
+  };
+}
 
 export function configPath() {
   const explicit = process.env.L2B_CONFIG;

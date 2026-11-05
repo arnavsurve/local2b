@@ -1,9 +1,11 @@
 {
   "provider": "e2b",
   "gitHost": { "type": "github" },
+  "clone": { "strategy": "mirror", "depth": 50, "filter": "blob:limit=50m" },
   "secrets": [{ "type": "doppler", "project": "my-project", "config": "dev" }],
   "repos": {
-    "my-org/my-repo": { "install": "yarn install" }
+    "my-org/my-repo": { "install": "yarn install" },
+    "my-org/small-repo": { "clone": { "strategy": "plain", "depth": null, "filter": null } }
   },
   "e2b": {
     "apiKey": { "from": "doppler", "project": "my-project", "config": "dev", "name": "E2B_API_KEY" },
