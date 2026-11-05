@@ -158,7 +158,9 @@ export function createE2bProvider({
       const paginator = Sandbox.listSnapshots({ apiKey: await apiKey() });
       do {
         for (const snapshot of await paginator.nextItems()) {
-          if (snapshotHasName({ names: snapshot.names, name })) return snapshot.snapshotId;
+          if (snapshotHasName({ names: snapshot.names, name })) {
+            return { id: snapshot.snapshotId, createdAt: null };
+          }
         }
       } while (paginator.hasNext);
       return null;

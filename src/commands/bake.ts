@@ -1,12 +1,14 @@
 import { parseArgs } from 'node:util';
 import { requirePositional } from '../args';
 import { hostFor, remoteUrl } from '../git-host';
+import { parseDuration } from '../duration';
 import { bakeScript } from '../git-scripts';
 import { checkoutDir, mirrorDir, repoName, snapshotName } from '../repo';
 import type { Command } from '../context';
 import { step } from '../progress';
 import { configureGit, pushCreds, pushEnv, runChecked, scrubCreds } from '../session';
 import { HOME } from '../shell';
+import { lookupSnapshot, formatAge, recordBake } from '../snapshots';
 import { resolveImage, secretSourcesFor } from '../sources';
 
 /**
@@ -25,6 +27,7 @@ export const bake: Command = async ({ ctx, args }) => {
       install: { type: 'string' },
       warm: { type: 'string' },
       branch: { type: 'string' },
+      'if-older-than': { type: 'string' },
     },
   });
   const repo = requirePositional({
@@ -33,6 +36,17 @@ export const bake: Command = async ({ ctx, args }) => {
     usage: 'l2b bake <owner/repo>',
   });
   const host = hostFor({ config: ctx.config, repo });
+  const skipIfNewerThanMs = values['if-older-than'] ? parseDuration(values['if-older-than']) : null;
+  if (skipIfNewerThanMs !== null) {
+    const existing = await lookupSnapshot({ provider: ctx.provider, repo });
+    const ageMs = existing?.createdAt ? Date.now() - existing.createdAt.getTime() : null;
+    if (ageMs !== null && ageMs < skipIfNewerThanMs) {
+      console.log(
+        `snapshot for ${repo} is ${formatAge({ hours: ageMs / 3_600_000 })} old, newer than ${values['if-older-than']}; skipping bake`
+      );
+      return;
+    }
+  }
   const bakeName = `bake-${repoName(repo)}`;
   if (await ctx.provider.exists({ name: bakeName })) {
     throw new Error(`stale bake sandbox "${bakeName}" exists; run: l2b down ${bakeName}`);
@@ -71,5 +85,6 @@ export const bake: Command = async ({ ctx, args }) => {
   await scrubCreds({ box });
   const snapshotId = await box.snapshot({ name: snapshotName(repo) });
   await box.destroy();
+  await recordBake({ provider: ctx.provider.id, repo, at: new Date() });
   console.log(`baked ${snapshotId}`);
 };

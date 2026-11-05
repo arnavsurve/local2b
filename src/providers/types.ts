@@ -57,8 +57,11 @@ export type Provider = {
   connect(opts: { name: string }): Promise<Box>;
   list(): Promise<BoxSummary[]>;
   exists(opts: { name: string }): Promise<boolean>;
-  /** Image reference for a snapshot made by `Box.snapshot`, or null. */
-  findSnapshot(opts: { name: string }): Promise<string | null>;
+  /**
+   * Image reference for a snapshot made by `Box.snapshot`, or null.
+   * `createdAt` is null when the provider can't report it.
+   */
+  findSnapshot(opts: { name: string }): Promise<{ id: string; createdAt: Date | null } | null>;
   /** Builds the tooling-only base image and returns its reference. */
   buildImage(): Promise<string>;
 };
