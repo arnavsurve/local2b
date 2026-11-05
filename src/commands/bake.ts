@@ -1,5 +1,6 @@
 import { parseArgs } from 'node:util';
 import { requirePositional } from '../args';
+import { resolveClone } from '../config';
 import { hostFor, remoteUrl } from '../git-host';
 import { parseDuration } from '../duration';
 import { bakeScript } from '../git-scripts';
@@ -65,19 +66,22 @@ export const bake: Command = async ({ ctx: base, args }) => {
   });
   await pushEnv({ box, env: ctx.config.repos[repo]?.env ?? {} });
   await configureGit({ box, host });
-  step('cloning the mirror and installing dependencies (several minutes)');
+  const clone = resolveClone({ config: ctx.config, repo });
+  console.log(`clone strategy: ${clone.strategy}`);
+  step('cloning and installing dependencies (several minutes)');
   await runChecked({
     box,
     cwd: box.homeDir,
     what: `bake (sandbox ${bakeName} left up for inspection)`,
     cmd: bakeScript({
       remote: remoteUrl({ host, repo }),
-      mirror: mirrorDir({ homeDir: box.homeDir, repo }),
+      mirror: clone.strategy === 'mirror' ? mirrorDir({ homeDir: box.homeDir, repo }) : null,
       checkout: checkoutDir({ homeDir: box.homeDir, repo }),
       install: values.install ?? ctx.config.repos[repo]?.install ?? null,
       warm: values.warm ?? ctx.config.repos[repo]?.warm ?? null,
       branch: values.branch ?? ctx.config.repos[repo]?.baseBranch ?? null,
-      depth: ctx.config.cloneDepth,
+      depth: clone.depth,
+      filter: clone.filter,
     }),
   });
 

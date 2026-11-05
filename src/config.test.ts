@@ -2,7 +2,7 @@ import { afterEach, expect, test } from 'bun:test';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { loadConfig } from './config';
+import { configSchema, loadConfig, resolveClone } from './config';
 
 const dirs: string[] = [];
 
@@ -76,4 +76,47 @@ test('a repo can name its provider', async () => {
   const config = await loadConfig();
   expect(config.repos['o/r']?.provider).toBe('e2b');
   expect(config.repos['o/s']?.provider).toBeNull();
+});
+
+test('clone options default to today\'s mirror behaviour', () => {
+  const config = configSchema.parse({});
+  expect(resolveClone({ config, repo: 'o/r' })).toEqual({
+    strategy: 'mirror',
+    depth: 50,
+    filter: 'blob:limit=50m',
+  });
+});
+
+test('cloneDepth remains an alias for the global depth, and clone.depth wins', () => {
+  const alias = configSchema.parse({ cloneDepth: 10 });
+  expect(resolveClone({ config: alias, repo: 'o/r' }).depth).toBe(10);
+  const both = configSchema.parse({ cloneDepth: 10, clone: { depth: 5 } });
+  expect(resolveClone({ config: both, repo: 'o/r' }).depth).toBe(5);
+});
+
+test('per-repo clone overrides inherit unset fields and allow null', () => {
+  const config = configSchema.parse({
+    clone: { depth: 20, filter: 'blob:none' },
+    repos: {
+      'o/small': { clone: { strategy: 'plain', depth: null } },
+      'o/nofilter': { clone: { filter: null } },
+    },
+  });
+  expect(resolveClone({ config, repo: 'o/small' })).toEqual({
+    strategy: 'plain',
+    depth: null,
+    filter: 'blob:none',
+  });
+  expect(resolveClone({ config, repo: 'o/nofilter' })).toEqual({
+    strategy: 'mirror',
+    depth: 20,
+    filter: null,
+  });
+  expect(resolveClone({ config, repo: 'o/other' }).depth).toBe(20);
+});
+
+test('a filter that could smuggle shell is rejected', () => {
+  expect(configSchema.safeParse({ clone: { filter: '; rm -rf /' } }).success).toBe(false);
+  expect(configSchema.safeParse({ repos: { 'o/r': { clone: { filter: '$(id)' } } } }).success).toBe(false);
+  expect(configSchema.safeParse({ clone: { filter: 'combine:blob:none+tree:0' } }).success).toBe(true);
 });

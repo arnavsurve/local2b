@@ -93,7 +93,10 @@ A command reference trims one trailing newline and fails on empty output. Tools 
 | `gitHost` | `{ "type": "github" }` | See Git hosts |
 | `idle.minutes` | `15` | Idle time before a box expires |
 | `idle.action` | `"kill"` | `kill` discards the box; `pause` keeps disk and memory |
-| `cloneDepth` | `50` | Commits kept in a baked mirror |
+| `clone.strategy` | `"mirror"` | `mirror`: bare mirror plus a worktree checkout. `plain`: an ordinary clone |
+| `clone.depth` | `50` | Commits of history kept; `null` for full history |
+| `clone.filter` | `"blob:limit=50m"` | Git partial-clone filter, e.g. `blob:none`; `null` for none |
+| `cloneDepth` | none | Kept for compatibility; the global default for `clone.depth`. Prefer `clone.depth` |
 | `staleSnapshotHours` | `72` | `up` and `run` hint to re-bake past this age |
 | `repos.<o/r>.baseBranch` | repo default | Branch the snapshot is baked from |
 | `repos.<o/r>.install` | none | Runs on every `up`. Keep it incremental |
@@ -101,8 +104,11 @@ A command reference trims one trailing newline and fails on empty output. Tools 
 | `repos.<o/r>.env` | `{}` | Plain, non-secret variables set in every box for this repo |
 | `repos.<o/r>.gitHost` | global | Per-repo override |
 | `repos.<o/r>.provider` | global `provider` | Provider used for this repo |
+| `repos.<o/r>.clone` | global | Per-repo override of `strategy`, `depth` and `filter`. Unset fields inherit |
 
-`baseBranch` and `warm` apply on the next `l2b bake`.
+`baseBranch`, `warm` and `clone` apply on the next `l2b bake`, which prints the strategy it used. `up` follows what the snapshot contains: it uses a baked mirror if one exists and otherwise fetches in place, so changing the strategy never breaks an existing snapshot. `--full` on `up` or `run` clones without a snapshot at full depth and keeps the filter.
+
+Use `plain` for small repos. A mirror pays off when the repo is large and boxes switch branches often; for a small repo it adds a second copy and nothing else.
 
 ## Providers
 
