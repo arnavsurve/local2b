@@ -27,6 +27,8 @@ export function fakeProvider({
   const executed: string[] = [];
   const files = new Map<string, string>();
   const snapshots = new Set<string>();
+  /** Names `ls -A` reports for any checkout root. */
+  const rootFiles: string[] = [];
 
   const guard = () => {
     if (failure === 'auth') throw new ProviderAuthError({ provider: id, hint: `set ${id.toUpperCase()}_API_KEY` });
@@ -37,8 +39,9 @@ export function fakeProvider({
     id: `id-${name}`,
     workdir,
     homeDir,
-    async exec({ cmd }) {
+    async exec({ cmd, onOutput }) {
       executed.push(cmd);
+      if (cmd === 'ls -A') onOutput({ stream: 'stdout', data: rootFiles.map((f) => `${f}\n`).join('') });
       if (failExecWhen && cmd.includes(failExecWhen)) throw new Error('exec blew up');
       return execExitCode;
     },
@@ -88,7 +91,7 @@ export function fakeProvider({
     buildImage: async () => 'fake-image',
   };
 
-  return { provider, alive, executed, files, snapshots };
+  return { provider, alive, executed, files, snapshots, rootFiles };
 }
 
 export function fakeContext({
@@ -110,7 +113,7 @@ export function fakeContext({
     flag: null,
     env: null,
   };
-  return { ctx, alive: fake.alive, executed: fake.executed, files: fake.files, snapshots: fake.snapshots };
+  return { ctx, alive: fake.alive, executed: fake.executed, files: fake.files, snapshots: fake.snapshots, rootFiles: fake.rootFiles };
 }
 
 /**
