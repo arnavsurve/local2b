@@ -1,25 +1,23 @@
 # local2b
 
-Run heavy repo work on remote sandboxes instead of your laptop: typechecks, test suites, installs, dev servers. `l2b` is a small CLI for coding agents and humans, built on [e2b](https://e2b.dev).
+Run heavy repo work on remote sandboxes instead of your laptop: typechecks, test suites, installs, dev servers. `l2b` is a small CLI for coding agents and humans. Sandbox providers are pluggable; [e2b](https://e2b.dev) is the first.
 
     l2b run --repo my-org/my-repo --branch feature/x -- yarn test
 
 That starts a box, checks out the branch with dependencies installed, runs the command, destroys the box, and hands you the exit code.
 
-## Why not just the e2b CLI?
-
-l2b uses the e2b SDK. It adds the parts you would otherwise script yourself:
+## What it does
 
 - **Your credentials, never baked in.** Your `gh` token and any Doppler or env secrets are pushed to the box's tmpfs on each call. Images and snapshots never contain them.
 - **Fast starts.** Bake a repo once. A box is then a branch switch plus an incremental install, about a minute instead of a clone and full install.
 - **Cleanup you can't forget.** `run` always destroys its box, and idle boxes expire server-side.
 - **Built for agents.** A skill says when to use it, commands default to the repo checkout, and every `run` ends with `command exited <code>`.
 
-Limits: e2b is the only provider, you pay for the compute, and you re-bake when a repo drifts far from its snapshot.
+Limits: you pay your provider for the compute, and you re-bake when a repo drifts far from its snapshot.
 
 ## Quick start
 
-You need [Bun](https://bun.sh), an `E2B_API_KEY`, and `gh` (or `GH_TOKEN`). Doppler is optional.
+You need [Bun](https://bun.sh), an API key for your provider, and `gh` (or `GH_TOKEN`). Doppler is optional.
 
     bun install
     mkdir -p ~/.config/l2b && cp config.example.json ~/.config/l2b/config.json
@@ -45,7 +43,7 @@ Use `run` for one-off work. Use `up`, `exec` and `down` when several commands ne
 
 ## How it works
 
-An **image** holds tooling only: Node, git, gh, Docker and whatever else you configure. `l2b image build` makes it once. A **snapshot** is a per-repo disk capture on top of that image, made by `l2b bake`: a shallow mirror, a checkout, installed dependencies, and any codegen from `warm`. A **box** is a sandbox started from the snapshot. `up` pushes credentials, switches the checkout to your branch, and runs `install` incrementally.
+An **image** holds tooling only: git, gh, a language runtime and whatever else you configure. `l2b image build` makes it once. A **snapshot** is a per-repo disk capture on top of that image, made by `l2b bake`: a shallow mirror, a checkout, installed dependencies, and any codegen from `warm`. A **box** is a sandbox started from the snapshot. `up` pushes credentials, switches the checkout to your branch, and runs `install` incrementally.
 
 Boxes expire 15 minutes after the last l2b activity, and a heartbeat holds that off while a command runs. Push a branch to keep work.
 
@@ -55,7 +53,7 @@ Nothing secret goes into an image or snapshot. At call time, l2b resolves a git 
 
 Anything the box runs can read those secrets, and a paused box keeps them in memory. Use a scoped `GH_TOKEN` rather than your full `gh` login if that matters to you.
 
-Secret sources are `doppler` (`--doppler project/config` or `secrets` in config) or `env` (local variable names). Provider API keys use the same mechanism through a value reference such as `{ "from": "doppler", "project": "p", "config": "dev", "name": "E2B_API_KEY" }`.
+Secret sources are `doppler` (`--doppler project/config` or `secrets` in config) or `env` (local variable names). A provider's API key uses the same mechanism through a value reference, for example `{ "from": "doppler", "project": "p", "config": "dev", "name": "E2B_API_KEY" }` or `{ "from": "env", "name": "E2B_API_KEY" }`.
 
 ## Config
 
@@ -63,7 +61,7 @@ Secret sources are `doppler` (`--doppler project/config` or `secrets` in config)
 
 | Key | Default | Meaning |
 | --- | --- | --- |
-| `provider` | `"e2b"` | Sandbox provider |
+| `provider` | `"e2b"` | Sandbox provider (`e2b`) |
 | `image` | provider default | Base image override |
 | `secrets` | `[]` | Sources pushed into every box: `{ "type": "doppler", "project", "config" }` or `{ "type": "env", "names": [...] }` |
 | `gitHost` | `{ "type": "github" }` | See Git hosts |
@@ -76,14 +74,21 @@ Secret sources are `doppler` (`--doppler project/config` or `secrets` in config)
 | `repos.<o/r>.warm` | none | Runs at bake only (codegen, builds). Output ships in the snapshot |
 | `repos.<o/r>.env` | `{}` | Plain, non-secret variables set in every box for this repo |
 | `repos.<o/r>.gitHost` | global | Per-repo override |
+
+`baseBranch` and `warm` apply on the next `l2b bake`.
+
+### e2b
+
+Set `E2B_API_KEY`, or point `e2b.apiKey` at Doppler. Image settings apply on the next `l2b image build`.
+
+| Key | Default | Meaning |
+| --- | --- | --- |
 | `e2b.apiKey` | env `E2B_API_KEY` | Value reference: `env` or `doppler` |
 | `e2b.cpuCount`, `e2b.memoryMB` | `4`, `8192` | Box size at image build |
 | `e2b.features` | all | Image tooling: `node`, `gh`, `doppler`, `docker`, `postgres`, `redis`, `ripgrep`, `tmux`. `[]` for a lean image |
 | `e2b.nodeMajor` | `24` | Node version for the `node` feature |
 | `e2b.npmGlobals`, `e2b.aptPackages` | `[]` | Extra packages in the image |
 | `e2b.imageCommands` | `[]` | Shell commands run as the box user at image build, for toolchains |
-
-Image settings apply on the next `l2b image build`. `baseBranch` and `warm` apply on the next `l2b bake`.
 
 ## Git hosts
 

@@ -22,8 +22,8 @@ async function readBakeTimes() {
 const bakeKey = ({ provider, repo }: { provider: string; repo: string }) => `${provider}:${repo}`;
 
 /**
- * Notes when `repo` was baked. The e2b SDK does not report a snapshot's
- * creation time, so the age comes from this local record instead.
+ * Notes when `repo` was baked. Not every provider reports a snapshot's
+ * creation time (e2b does not), so the age comes from this local record.
  */
 export async function recordBake({
   provider,

@@ -13,7 +13,7 @@ import { url } from './commands/url';
 import { createContext, type Command } from './context';
 import { CommandFailedError } from './session';
 
-const USAGE = `l2b - remote dev sandboxes on e2b
+const USAGE = `l2b - remote dev sandboxes
 
   l2b run [--repo o/r] [--branch b] [--keep] -- <cmd...>  one-shot: box up, run, box destroyed (exit code passes through)
   l2b up <name> [--repo owner/repo] [--branch b] [--full] [--doppler project/config] [--image ref]
