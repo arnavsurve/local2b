@@ -81,6 +81,7 @@ export async function resolveGitIdentity({ override }: { override: GitIdentity |
     const proc = Bun.spawn(['git', 'config', '--global', '--get', key], {
       stdout: 'pipe',
       stderr: 'ignore',
+      env: process.env,
     });
     const text = (await new Response(proc.stdout).text()).trim();
     return (await proc.exited) === 0 && text ? text : null;
