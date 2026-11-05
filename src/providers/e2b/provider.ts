@@ -96,6 +96,7 @@ function describeRef({ ref }: { ref: ValueRef }) {
     case 'file':
       return `put the key in ${ref.path}, or change e2b.apiKey`;
     case 'doppler':
+    case 'firstOf':
     case 'command':
       return 'check the e2b.apiKey value reference in your config';
     default: {
