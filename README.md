@@ -1,6 +1,6 @@
 # local2b
 
-Run heavy repo work on remote sandboxes instead of your laptop: typechecks, test suites, installs, dev servers. `l2b` is a small CLI for coding agents and humans. Sandbox providers are pluggable; [e2b](https://e2b.dev) is the first.
+Run heavy repo work on remote sandboxes instead of your laptop: typechecks, test suites, installs, dev servers. For coding agents and people.
 
     l2b run --repo my-org/my-repo --branch feature/x -- yarn test
 
@@ -8,12 +8,10 @@ That starts a box, checks out the branch with dependencies installed, runs the c
 
 ## What it does
 
-- **Your credentials, never baked in.** Your `gh` token and any configured secrets are pushed to the box's tmpfs on each call. Images and snapshots never contain them.
-- **Fast starts.** Bake a repo once. A box is then a branch switch plus an incremental install, about a minute instead of a clone and full install.
-- **Cleanup you can't forget.** `run` always destroys its box, and idle boxes expire server-side.
-- **Built for agents.** A skill says when to use it, commands default to the repo checkout, and every `run` ends with `command exited <code>`.
-
-Limits: you pay your provider for the compute, and you re-bake when a repo drifts far from its snapshot.
+- Pushes your `gh` token and configured secrets to the box's tmpfs on each call. Images and snapshots never contain them.
+- Bakes a repo once, so a box starts as a branch switch plus an incremental install.
+- Destroys the box after `run`, and expires idle boxes on the provider's side.
+- Ships an agent skill. Commands default to the repo checkout, and `run` ends with `command exited <code>`.
 
 ## Quick start
 
@@ -51,7 +49,7 @@ Boxes expire 15 minutes after the last l2b activity, and a heartbeat holds that 
 
 Nothing secret goes into an image or snapshot. At call time, l2b resolves a git host token and your configured secrets locally and writes them to `/dev/shm/l2b.env` in the box (tmpfs, mode 600). Every `exec` sources that file. Bake deletes it before snapshotting, and snapshots are filesystem-only.
 
-Anything the box runs can read those secrets, and a paused box keeps them in memory. Use a scoped `GH_TOKEN` rather than your full `gh` login if that matters to you.
+Anything the box runs can read those secrets, and a paused box keeps them in memory. Prefer a scoped `GH_TOKEN` over your full `gh` login.
 
 ## Secret sources
 
