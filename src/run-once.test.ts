@@ -1,6 +1,6 @@
 import { beforeAll, expect, test } from 'bun:test';
 import { generatedBoxName, runOnce } from './run-once';
-import { fakeContext } from './test/fake-provider';
+import { fakeContext } from './test/fake-machine';
 
 const opts = {
   name: 'run-test',

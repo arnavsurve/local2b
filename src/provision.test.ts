@@ -3,7 +3,7 @@ import { configSchema } from './config';
 import { provisionBox } from './provision';
 import { plainEnvFile } from './session';
 import { snapshotName } from './repo';
-import { fakeContext } from './test/fake-provider';
+import { fakeContext } from './test/fake-machine';
 
 const opts = {
   name: 'home-test',

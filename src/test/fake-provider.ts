@@ -1,187 +1,348 @@
-import { configSchema } from '../config';
-import { buildContext, type Context } from '../context';
-import { ProviderAuthError, type Box, type Provider } from '../providers/types';
+import { cpSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { $ } from 'bun';
+import type { ContractSubject } from '../providers/contract';
+import {
+  ProviderAuthError,
+  UnsupportedError,
+  type Box,
+  type Credentials,
+  type ExecOutput,
+  type Provider,
+  type RepoSpec,
+  type Terminal,
+} from '../providers/types';
 
-type FakeFailure = 'auth' | 'network' | null;
+export type FakeFailure = 'auth' | 'network' | null;
+
+export type FakeClock = { now(): number; advance(opts: { ms: number }): void };
+
+export function fakeClock({ start }: { start: number }): FakeClock {
+  let now = start;
+  return {
+    now: () => now,
+    advance: ({ ms }) => {
+      now += ms;
+    },
+  };
+}
+
+type FakeBox = {
+  name: string;
+  home: string;
+  tmp: string;
+  workdir: string;
+  env: Record<string, string>;
+  credentials: Credentials;
+  idleMs: number;
+  lastActive: number;
+  running: number;
+  state: 'running' | 'paused';
+};
+
+const SWITCH_SCRIPT = [
+  'set -e',
+  'git fetch --quiet origin',
+  'if [ -z "$L2B_BRANCH" ]; then git checkout --quiet --detach origin/HEAD; exit 0; fi',
+  'if git rev-parse --verify --quiet "refs/remotes/origin/$L2B_BRANCH" >/dev/null; then start="origin/$L2B_BRANCH"; else start=origin/HEAD; fi',
+  'git checkout --quiet -B "$L2B_BRANCH" "$start"',
+].join('\n');
+
+const repoKey = (repo: RepoSpec) => `${repo.owner}/${repo.name}`;
 
 /**
  * In-memory provider standing in for the remote edge (the one boundary we
- * don't own). Tests assert on which boxes are still alive afterwards.
- * `failure` makes every provider call fail the way a missing key or an
- * unreachable API would.
+ * don't own). Each box is a temp directory and commands run in a real local
+ * bash, so checkouts and installs are real. Credentials live only in this
+ * process's memory and reach commands as environment variables. Idle expiry
+ * follows the injected clock: a box idle past its window is gone on the next
+ * call. Terminals are unsupported. `failure` makes every call fail the way a
+ * missing key or an unreachable API would.
  */
-export function fakeProvider({
-  id,
-  execExitCode,
-  failExecWhen,
-  homeDir,
-  failure,
-}: {
-  id: string;
-  execExitCode: number;
-  failExecWhen: string | null;
-  homeDir: string;
-  failure: FakeFailure;
-}) {
-  const alive = new Set<string>();
-  const executed: string[] = [];
-  const files = new Map<string, string>();
-  const snapshots = new Set<string>();
-  /** Names `ls -A` reports for any checkout root. */
-  const rootFiles: string[] = [];
+export function fakeProvider({ id, clock, failure }: { id: string; clock: FakeClock; failure: FakeFailure }) {
+  const root = mkdtempSync(join(tmpdir(), `l2b-fake-${id}-`));
+  const boxes = new Map<string, FakeBox>();
+  const bakes = new Map<string, { dir: string; at: Date }>();
+  /** Every command line run, as a provider-side history would keep it. */
+  const history: string[] = [];
+  let prepared = 0;
 
   const guard = () => {
     if (failure === 'auth') throw new ProviderAuthError({ provider: id, hint: `set ${id.toUpperCase()}_API_KEY` });
     if (failure === 'network') throw new Error(`${id} is unreachable`);
   };
 
-  const makeBox = ({ name, workdir }: { name: string; workdir: string }): Box => ({
-    id: `id-${name}`,
-    workdir,
-    homeDir,
-    async exec({ cmd, onOutput }) {
-      executed.push(cmd);
-      if (cmd === 'ls -A') onOutput({ stream: 'stdout', data: rootFiles.map((f) => `${f}\n`).join('') });
-      if (failExecWhen && cmd.includes(failExecWhen)) throw new Error('exec blew up');
-      return execExitCode;
+  const expireIdle = () => {
+    for (const box of boxes.values()) {
+      if (box.running === 0 && clock.now() - box.lastActive >= box.idleMs) remove(box);
+    }
+  };
+
+  const remove = (box: FakeBox) => {
+    boxes.delete(box.name);
+    rmSync(join(root, 'boxes', box.name), { recursive: true, force: true });
+  };
+
+  async function spawn({
+    cmd,
+    cwd,
+    env,
+    onOutput,
+  }: {
+    cmd: string;
+    cwd: string;
+    env: Record<string, string>;
+    onOutput: (output: ExecOutput) => void;
+  }) {
+    history.push(cmd);
+    const proc = Bun.spawn(['bash', '-c', cmd], { cwd, env, stdin: 'ignore', stdout: 'pipe', stderr: 'pipe' });
+    const pump = async (stream: ReadableStream<Uint8Array>, name: ExecOutput['stream']) => {
+      const decoder = new TextDecoder();
+      for await (const chunk of stream) onOutput({ stream: name, data: decoder.decode(chunk, { stream: true }) });
+    };
+    try {
+      await Promise.all([pump(proc.stdout, 'stdout'), pump(proc.stderr, 'stderr')]);
+    } catch (err) {
+      proc.kill('SIGKILL');
+      await proc.exited;
+      throw err;
+    }
+    return proc.exited;
+  }
+
+  const envFor = ({ home, tmp, env, credentials }: { home: string; tmp: string; env: Record<string, string>; credentials: Credentials }) => ({
+    PATH: process.env.PATH ?? '/usr/bin:/bin',
+    HOME: home,
+    TMPDIR: tmp,
+    GIT_TERMINAL_PROMPT: '0',
+    ...env,
+    ...credentials.variables,
+  });
+
+  async function checked({ what, ...opts }: { what: string; cmd: string; cwd: string; env: Record<string, string> }) {
+    let stderr = '';
+    const code = await spawn({ ...opts, onOutput: (o) => (stderr += o.stream === 'stderr' ? o.data : '') });
+    if (code !== 0) throw new Error(`${what} failed (exit ${code}): ${stderr.trim()}`);
+  }
+
+  async function prepareCheckout({
+    repo,
+    dir,
+    env,
+    seed,
+    branch,
+    extra,
+  }: {
+    repo: RepoSpec;
+    dir: string;
+    env: Record<string, string>;
+    seed: string | null;
+    branch: string | null;
+    extra: string | null;
+  }) {
+    if (seed) cpSync(seed, dir, { recursive: true });
+    else await checked({ what: 'git clone', cmd: `git clone --quiet "$L2B_REMOTE" "$L2B_DIR"`, cwd: root, env: { ...env, L2B_REMOTE: repo.remoteUrl, L2B_DIR: dir } });
+    await checked({ what: 'branch checkout', cmd: SWITCH_SCRIPT, cwd: dir, env: { ...env, L2B_BRANCH: branch ?? '' } });
+    for (const cmd of [repo.install, extra]) {
+      if (cmd) await checked({ what: 'install', cmd, cwd: dir, env });
+    }
+  }
+
+  const touch = (box: FakeBox) => {
+    box.lastActive = clock.now();
+    box.state = 'running';
+  };
+
+  const live = (name: string) => {
+    expireIdle();
+    const box = boxes.get(name);
+    if (!box) throw new Error(`no sandbox named "${name}" (try: l2b ls)`);
+    return box;
+  };
+
+  const wrap = (box: FakeBox): Box => ({
+    name: box.name,
+    workdir: box.workdir,
+    async exec({ cmd, cwd, onOutput }) {
+      const current = live(box.name);
+      current.running += 1;
+      touch(current);
+      try {
+        return await spawn({ cmd, cwd: cwd ?? current.workdir, env: envFor(current), onOutput });
+      } finally {
+        current.running -= 1;
+        touch(current);
+      }
     },
-    async shell() {
-      throw new Error('not used');
+    async attach() {
+      throw new UnsupportedError({ provider: id, operation: 'attach', suggestion: 'use l2b exec' });
     },
-    async writeFile({ path, content }) {
-      files.set(path, content);
+    async url({ port }) {
+      live(box.name);
+      return { url: `https://${id}:${port}/${box.name}`, note: null };
     },
-    publicUrl: ({ port }) => `https://${id}:${port}/${name}`,
-    pause: async () => {},
-    destroy: async () => {
-      alive.delete(name);
+    async refreshCredentials({ credentials }) {
+      live(box.name).credentials = credentials;
     },
-    snapshot: async ({ name }) => {
-      snapshots.add(name);
-      return 'snap';
+    async pause() {
+      live(box.name).state = 'paused';
+    },
+    async destroy() {
+      const current = boxes.get(box.name);
+      if (current) remove(current);
     },
   });
 
   const provider: Provider = {
     id,
-    homeDir,
-    defaultImage: 'fake-image',
-    async create({ name, workdir }) {
+    async prepare() {
       guard();
-      alive.add(name);
-      return makeBox({ name, workdir });
+      prepared += 1;
+      return 'nothing to prepare';
+    },
+    async bake({ repo, credentials }) {
+      guard();
+      const dir = join(root, 'bakes', repo.owner, repo.name);
+      const bakeHome = join(root, 'bake-home', repo.owner, repo.name);
+      rmSync(dir, { recursive: true, force: true });
+      mkdirSync(join(dir, '..'), { recursive: true });
+      mkdirSync(bakeHome, { recursive: true });
+      try {
+        const env = envFor({ home: bakeHome, tmp: bakeHome, env: repo.env, credentials });
+        await prepareCheckout({ repo, dir, env, seed: null, branch: repo.baseBranch, extra: repo.warm });
+      } finally {
+        rmSync(bakeHome, { recursive: true, force: true });
+      }
+      const at = new Date(clock.now());
+      bakes.set(repoKey(repo), { dir, at });
+      return { summary: `${id}:${repoKey(repo)}`, bakedAt: at };
+    },
+    async bakedAt({ repo }) {
+      guard();
+      return bakes.get(repoKey(repo))?.at ?? null;
+    },
+    async start({ name, repo, branch, source, idle, credentials }) {
+      guard();
+      expireIdle();
+      if (boxes.has(name)) {
+        throw new Error(`sandbox "${name}" already exists: reuse it with \`l2b exec ${name} -- <cmd>\`, or \`l2b down ${name}\` first`);
+      }
+      const dir = join(root, 'boxes', name);
+      const home = join(dir, 'home');
+      const tmp = join(dir, 'tmp');
+      mkdirSync(home, { recursive: true });
+      mkdirSync(tmp, { recursive: true });
+      const box: FakeBox = {
+        name,
+        home,
+        tmp,
+        workdir: repo ? join(home, repo.name) : home,
+        env: repo?.env ?? {},
+        credentials,
+        idleMs: idle.minutes * 60_000,
+        lastActive: clock.now(),
+        running: 1,
+        state: 'running',
+      };
+      boxes.set(name, box);
+      try {
+        if (repo) {
+          const bake = source === 'bake' ? (bakes.get(repoKey(repo))?.dir ?? null) : null;
+          await prepareCheckout({ repo, dir: box.workdir, env: envFor(box), seed: bake, branch, extra: null });
+        }
+      } catch (err) {
+        remove(box);
+        throw err;
+      } finally {
+        box.running -= 1;
+        touch(box);
+      }
+      return wrap(box);
     },
     async connect({ name }) {
       guard();
-      if (!alive.has(name)) throw new Error(`no sandbox named "${name}" (try: l2b ls)`);
-      return makeBox({ name, workdir: homeDir });
-    },
-    async list() {
-      guard();
-      return [...alive].map((name) => ({ name, state: 'running', id: `id-${name}`, image: 'fake-image' }));
+      const box = live(name);
+      touch(box);
+      return wrap(box);
     },
     async exists({ name }) {
       guard();
-      return alive.has(name);
+      expireIdle();
+      return boxes.has(name);
     },
-    async findSnapshot({ name }) {
+    async list() {
       guard();
-      return snapshots.has(name) ? { id: 'snap', createdAt: null } : null;
+      expireIdle();
+      return [...boxes.values()].map((box) => ({ name: box.name, state: box.state, id: `id-${box.name}`, image: 'fake-image' }));
     },
-    buildImage: async () => 'fake-image',
   };
 
-  return { provider, alive, executed, files, snapshots, rootFiles };
-}
+  /** Command lines and files the fake keeps that contain `value`. */
+  async function findPersisted({ value }: { value: string }) {
+    const inHistory = history.filter((cmd) => cmd.includes(value)).map((cmd) => `history: ${cmd}`);
+    const onDisk = (await $`grep -rlF -e ${value} ${root}`.nothrow().quiet()).text().split('\n').filter(Boolean);
+    return [...inHistory, ...onDisk];
+  }
 
-export function fakeContext({
-  execExitCode,
-  failExecWhen,
-  homeDir,
-}: {
-  execExitCode: number;
-  failExecWhen: string | null;
-  homeDir: string;
-}) {
-  const fake = fakeProvider({ id: 'fake', execExitCode, failExecWhen, homeDir, failure: null });
-  const ctx: Context = {
-    config: configSchema.parse({}),
-    provider: fake.provider,
-    providers: [fake.provider],
-    configured: ['fake'],
-    defaultId: 'fake',
-    flag: null,
-    env: null,
-  };
-  return { ctx, alive: fake.alive, executed: fake.executed, files: fake.files, snapshots: fake.snapshots, rootFiles: fake.rootFiles };
-}
-
-/**
- * A context with several named fake providers. The first is the config
- * default; `configured` lists the ones searched when addressing a box by name.
- */
-export function fakeMultiContext({
-  providers,
-  configured,
-  flag,
-  env,
-  repos,
-}: {
-  providers: { id: string; failure: FakeFailure }[];
-  configured: string[];
-  flag: string | null;
-  env: string | null;
-  repos: Record<string, string>;
-}) {
-  const fakes = providers.map(({ id, failure }) =>
-    fakeProvider({ id, execExitCode: 0, failExecWhen: null, homeDir: '/home/user', failure })
-  );
-  const [first] = fakes;
-  if (!first) throw new Error('fakeMultiContext needs at least one provider');
-  const base = configSchema.parse({});
-  const config = {
-    ...base,
-    repos: Object.fromEntries(
-      Object.entries(repos).map(([repo, provider]) => [
-        repo,
-        { provider, clone: {}, gitHost: null, baseBranch: null, install: null, warm: null, env: {} },
-      ])
-    ),
-  };
-  const ctx = buildContext({
-    config,
-    providers: fakes.map((f) => f.provider),
-    configured,
-    defaultId: first.provider.id,
-    flag,
-    env,
-  });
-  const fake = (id: string) => {
-    const found = fakes.find((f) => f.provider.id === id);
-    if (!found) throw new Error(`no fake provider ${id}`);
-    return found;
-  };
-  return { ctx, fake };
-}
-
-/**
- * A box whose `exec` runs the command in a real local bash, for testing code
- * that builds shell scripts. `homeDir` should be a real temp dir.
- */
-export function withLocalShell({ box }: { box: Box }): Box {
   return {
-    ...box,
-    async exec({ cmd, cwd, onOutput }) {
-      const proc = Bun.spawn(['bash', '-c', cmd], { cwd, stdout: 'pipe', stderr: 'pipe' });
-      const pump = async (stream: 'stdout' | 'stderr', body: ReadableStream<Uint8Array>) => {
-        for await (const chunk of body) onOutput({ stream, data: Buffer.from(chunk).toString() });
-      };
-      const [code] = await Promise.all([
-        proc.exited,
-        pump('stdout', proc.stdout),
-        pump('stderr', proc.stderr),
-      ]);
-      return code;
+    provider,
+    history,
+    findPersisted,
+    prepared: () => prepared,
+    alive: () => [...boxes.keys()],
+    cleanup: () => rmSync(root, { recursive: true, force: true }),
+  };
+}
+
+/** A local origin repo with a `main` and a `feature/contract` branch. */
+export async function fakeOrigin() {
+  const dir = mkdtempSync(join(tmpdir(), 'l2b-origin-'));
+  const git = (args: string[]) => $`git -c user.name=t -c user.email=t@t ${args}`.cwd(dir).quiet();
+  await git(['init', '-q', '-b', 'main']);
+  await Bun.write(join(dir, 'a.txt'), 'main\n');
+  await git(['add', '.']);
+  await git(['commit', '-qm', 'init']);
+  await git(['checkout', '-qb', 'feature/contract']);
+  await Bun.write(join(dir, 'a.txt'), 'feature\n');
+  await git(['commit', '-qam', 'feature work']);
+  await git(['checkout', '-q', 'main']);
+  return { dir, remoteUrl: `file://${dir}`, cleanup: () => rmSync(dir, { recursive: true, force: true }) };
+}
+
+const noTerminal: Terminal = {
+  size: () => ({ cols: 80, rows: 24 }),
+  onInput: () => () => {},
+  onResize: () => () => {},
+  write: () => {},
+};
+
+export async function fakeContractSubject(): Promise<ContractSubject> {
+  const clock = fakeClock({ start: Date.now() });
+  const fake = fakeProvider({ id: 'fake', clock, failure: null });
+  const origin = await fakeOrigin();
+  const idle = { minutes: 15 };
+  return {
+    provider: fake.provider,
+    repo: {
+      owner: 'o',
+      name: 'widgets',
+      remoteUrl: origin.remoteUrl,
+      baseBranch: null,
+      clone: { strategy: 'plain', depth: null, filter: null },
+      install: null,
+      warm: null,
+      env: {},
+    },
+    branch: 'feature/contract',
+    credentials: { variables: {}, git: null },
+    idle,
+    passIdleTime: async () => clock.advance({ ms: idle.minutes * 60_000 + 1 }),
+    findPersisted: fake.findPersisted,
+    unsupported: [{ operation: 'attach', attempt: ({ box }) => box.attach({ terminal: noTerminal, cwd: null }) }],
+    cleanup: async () => {
+      fake.cleanup();
+      origin.cleanup();
     },
   };
 }

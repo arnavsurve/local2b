@@ -3,7 +3,7 @@ import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { z } from 'zod';
 import { snapshotName } from './repo';
-import type { Provider } from './providers/types';
+import type { MachineHost } from './toolkit/machine';
 
 const bakeTimesSchema = z.record(z.string(), z.iso.datetime());
 
@@ -45,7 +45,7 @@ export async function recordBake({
  * The repo's snapshot, or null. `createdAt` is null when the provider can't
  * say and no local bake record exists (e.g. baked from another machine).
  */
-export async function lookupSnapshot({ provider, repo }: { provider: Provider; repo: string }) {
+export async function lookupSnapshot({ provider, repo }: { provider: MachineHost; repo: string }) {
   const found = await provider.findSnapshot({ name: snapshotName(repo) });
   if (!found) return null;
   if (found.createdAt) return found;

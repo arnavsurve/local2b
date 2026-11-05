@@ -3,7 +3,7 @@ import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { putContent, putLocalFile, remotePath } from './put';
-import { fakeContext } from './test/fake-provider';
+import { fakeContext } from './test/fake-machine';
 
 const box = async () => {
   const fake = fakeContext({ execExitCode: 0, failExecWhen: null, homeDir: '/home/user' });

@@ -1,11 +1,11 @@
 import type { Config } from '../config';
 import { createE2bProvider } from './e2b/provider';
 import { PROVIDER_IDS, type ProviderId } from './ids';
-import type { Provider } from './types';
+import type { MachineHost } from '../toolkit/machine';
 
 export { PROVIDER_IDS, type ProviderId };
 
-export function createProvider({ id, config }: { id: ProviderId; config: Config }): Provider {
+export function createProvider({ id, config }: { id: ProviderId; config: Config }): MachineHost {
   switch (id) {
     case 'e2b':
       return createE2bProvider({

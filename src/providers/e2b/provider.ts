@@ -1,5 +1,6 @@
 import { Sandbox, Template } from 'e2b';
-import { ProviderAuthError, type Box, type IdlePolicy, type Provider } from '../types';
+import { ProviderAuthError } from '../types';
+import type { IdlePolicy, Machine, MachineHost } from '../../toolkit/machine';
 import { withHeartbeat } from '../../keepalive';
 import type { Config } from '../../config';
 import { resolveValue, type ValueRef } from '../../secrets';
@@ -24,7 +25,7 @@ function wrapBox({
   idle: IdlePolicy;
   workdir: string;
   homeDir: string;
-}): Box {
+}): Machine {
   const keepAlive = () => sandbox.setTimeout(idle.ms);
   const held = <T>(task: () => Promise<T>) =>
     withHeartbeat({
@@ -112,7 +113,7 @@ export function createE2bProvider({
 }: {
   config: Config['e2b'];
   idle: IdlePolicy;
-}): Provider {
+}): MachineHost {
   const apiKey = async () => {
     try {
       return await resolveValue(config.apiKey);
