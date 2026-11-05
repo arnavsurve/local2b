@@ -71,7 +71,12 @@ export type StartOpts = {
   /** The box expires on its own after this long with no l2b activity. */
   idle: { minutes: number };
   credentials: Credentials;
+  /** Git author for commits made in the box; null leaves git's own default. */
+  gitIdentity: GitIdentity | null;
 };
+
+/** Set as the box user's global git `user.name` and `user.email`. */
+export type GitIdentity = { name: string; email: string };
 
 export type PublicUrl = {
   url: string;
@@ -99,10 +104,22 @@ export type Box = {
   name: string;
   /** The repo checkout, or the box user's home when started without a repo. */
   workdir: string;
-  /** Runs `cmd` in a shell, in `cwd` (null: `workdir`), and resolves with its exit code. */
+  /**
+   * Runs `cmd` in a shell, in `cwd` (null: `workdir`), and resolves with its
+   * exit code. `$HOME` is the box user's home. A process the command starts in
+   * the background (`nohup ... &`) keeps running after `exec` resolves.
+   */
   exec(opts: { cmd: string; cwd: string | null; onOutput: (output: ExecOutput) => void }): Promise<number>;
   /** Interactive shell; resolves with its exit code, or null when the provider cannot report one. */
   attach(opts: { terminal: Terminal; cwd: string | null }): Promise<number | null>;
+  /**
+   * Writes a text file and resolves with its absolute path. `path` is relative
+   * to `workdir` unless it is absolute or starts with `~/` (the box user's
+   * home). Parent directories are created, an existing file is replaced
+   * (including one in a sticky directory such as `/tmp`), and `executable`
+   * sets the exec bit.
+   */
+  put(opts: { path: string; content: string; executable: boolean }): Promise<string>;
   url(opts: { port: number }): Promise<PublicUrl>;
   /** Replaces the credentials later commands see. */
   refreshCredentials(opts: { credentials: Credentials }): Promise<void>;

@@ -1,6 +1,6 @@
-import { cpSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { chmodSync, cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, isAbsolute, join } from 'node:path';
 import { $ } from 'bun';
 import type { ContractSubject } from '../providers/contract';
 import {
@@ -178,6 +178,16 @@ export function fakeProvider({ id, clock, failure }: { id: string; clock: FakeCl
     async attach() {
       throw new UnsupportedError({ provider: id, operation: 'attach', suggestion: 'use l2b exec' });
     },
+    async put({ path, content, executable }) {
+      const current = live(box.name);
+      touch(current);
+      const target = isAbsolute(path) ? path : path.startsWith('~/') ? join(current.home, path.slice(2)) : join(current.workdir, path);
+      mkdirSync(dirname(target), { recursive: true });
+      rmSync(target, { force: true });
+      writeFileSync(target, content);
+      if (executable) chmodSync(target, 0o755);
+      return target;
+    },
     async url({ port }) {
       live(box.name);
       return { url: `https://${id}:${port}/${box.name}`, note: null };
@@ -222,7 +232,7 @@ export function fakeProvider({ id, clock, failure }: { id: string; clock: FakeCl
       guard();
       return bakes.get(repoKey(repo))?.at ?? null;
     },
-    async start({ name, repo, branch, source, idle, credentials }) {
+    async start({ name, repo, branch, source, idle, credentials, gitIdentity }) {
       guard();
       expireIdle();
       if (boxes.has(name)) {
@@ -247,6 +257,14 @@ export function fakeProvider({ id, clock, failure }: { id: string; clock: FakeCl
       };
       boxes.set(name, box);
       try {
+        if (gitIdentity) {
+          await checked({
+            what: 'git identity',
+            cmd: 'git config --global user.name "$L2B_NAME" && git config --global user.email "$L2B_EMAIL"',
+            cwd: home,
+            env: { ...envFor(box), L2B_NAME: gitIdentity.name, L2B_EMAIL: gitIdentity.email },
+          });
+        }
         if (repo) {
           const bake = source === 'bake' ? (bakes.get(repoKey(repo))?.dir ?? null) : null;
           await prepareCheckout({ repo, dir: box.workdir, env: envFor(box), seed: bake, branch, extra: null });

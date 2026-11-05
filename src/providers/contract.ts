@@ -98,6 +98,7 @@ export function describeProviderContract({
         image: null,
         idle: subject.idle,
         credentials: credentials({ value }),
+        gitIdentity: null,
       });
       try {
         return await run(box);
@@ -161,6 +162,80 @@ export function describeProviderContract({
       });
     }, timeoutMs);
 
+    test('a background process started by exec outlives it and sees the env', async () => {
+      await withBox({
+        branch: null,
+        useRepo: 'none',
+        value: canary,
+        run: async (box) => {
+          const marker = '"$HOME/.l2b-contract-background"';
+          const started = Date.now();
+          const launch = `nohup sh -c 'sleep 2; printf %s "$${VAR}" > ${marker}' >/dev/null 2>&1 </dev/null &`;
+          expect((await capture({ box, cmd: launch, cwd: null })).exitCode).toBe(0);
+          expect(Date.now() - started).toBeLessThan(30_000);
+          let seen = '';
+          for (let i = 0; i < 60 && seen === ''; i++) {
+            await Bun.sleep(500);
+            seen = (await capture({ box, cmd: `cat ${marker} 2>/dev/null`, cwd: null })).stdout;
+          }
+          expect(seen).toBe(canary);
+        },
+      });
+    }, timeoutMs);
+
+    test('put writes text relative to the workdir, the home or an absolute path, replacing what is there', async () => {
+      await withBox({
+        branch: subject.branch,
+        useRepo: 'repo',
+        value: canary,
+        run: async (box) => {
+          const cat = async (path: string) => (await capture({ box, cmd: `cat '${path}'`, cwd: null })).stdout;
+          const isExecutable = async (path: string) => (await capture({ box, cmd: `test -x '${path}'`, cwd: null })).exitCode === 0;
+          const tricky = "it's `tricky` $(whoami) \"x\"\nline2\n";
+
+          const relative = await box.put({ path: 'l2b-contract/sub/f.txt', content: tricky, executable: false });
+          expect(relative).toBe(`${box.workdir}/l2b-contract/sub/f.txt`);
+          expect(await cat(relative)).toBe(tricky);
+          expect(await isExecutable(relative)).toBe(false);
+
+          const home = await stdoutOf({ box, cmd: 'printf %s "$HOME"' });
+          const script = await box.put({ path: '~/.l2b-contract/run.sh', content: '#!/bin/sh\necho hi\n', executable: true });
+          expect(script).toBe(`${home}/.l2b-contract/run.sh`);
+          expect(await isExecutable(script)).toBe(true);
+          expect(await stdoutOf({ box, cmd: `'${script}'` })).toBe('hi');
+
+          const tmp = `/tmp/${uniqueName('l2b-contract-put')}`;
+          try {
+            expect(await box.put({ path: tmp, content: 'one\n', executable: false })).toBe(tmp);
+            await box.put({ path: tmp, content: 'two\n', executable: false });
+            expect(await cat(tmp)).toBe('two\n');
+          } finally {
+            await capture({ box, cmd: `rm -f '${tmp}'`, cwd: null });
+          }
+        },
+      });
+    }, timeoutMs);
+
+    test('a box started with a git identity commits as that author', async () => {
+      const box = await subject.provider.start({
+        name: uniqueName('contract'),
+        repo: repo(),
+        branch: subject.branch,
+        source: 'fresh',
+        image: null,
+        idle: subject.idle,
+        credentials: credentials({ value: canary }),
+        gitIdentity: { name: "Ada O'Neil", email: 'ada@example.com' },
+      });
+      try {
+        expect(await stdoutOf({ box, cmd: 'git config --global --get user.email' })).toBe('ada@example.com');
+        await stdoutOf({ box, cmd: 'git commit -q --allow-empty -m l2b-contract' });
+        expect(await stdoutOf({ box, cmd: 'git log -1 --format=%an,%ae' })).toBe("Ada O'Neil,ada@example.com");
+      } finally {
+        await box.destroy();
+      }
+    }, timeoutMs);
+
     test('credentials and repo env reach commands, and a refresh replaces them', async () => {
       await withBox({
         branch: subject.branch,
@@ -211,6 +286,7 @@ export function describeProviderContract({
         image: null,
         idle: subject.idle,
         credentials: credentials({ value: canary }),
+        gitIdentity: null,
       });
       try {
         await expectCheckoutOf({ box, branch: subject.branch, ref: `refs/heads/${subject.branch}` });
@@ -231,6 +307,7 @@ export function describeProviderContract({
           image: null,
           idle: subject.idle,
           credentials: credentials({ value: canary }),
+          gitIdentity: null,
         },
         cmd,
         label: cmd,
@@ -276,6 +353,7 @@ export function describeProviderContract({
           image: null,
           idle: subject.idle,
           credentials: credentials({ value: canary }),
+          gitIdentity: null,
         })
       ).rejects.toThrow();
       await expectGone(name);
@@ -296,6 +374,7 @@ export function describeProviderContract({
               image: null,
               idle: subject.idle,
               credentials: credentials({ value: canary }),
+              gitIdentity: null,
             })
           ).rejects.toThrow();
           expect(await subject.provider.exists({ name: box.name })).toBe(true);
@@ -319,6 +398,7 @@ export function describeProviderContract({
         image: null,
         idle: subject.idle,
         credentials: credentials({ value: canary }),
+        gitIdentity: null,
       });
       expect(await subject.provider.exists({ name: box.name })).toBe(true);
       await subject.passIdleTime();
