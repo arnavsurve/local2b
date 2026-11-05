@@ -27,6 +27,10 @@ It creates a box, checks out the branch (dependencies installed), runs the comma
 - Pass the trunk branch name the repo really uses; if unsure, check with `git ls-remote --heads origin`.
 - Add `--keep` to leave the box up for follow-ups (it prints the box name).
 
+## Writing files into a box
+
+To write a file, use `l2b put <name> <local-path> <remote-path>` (or `-` to read stdin). Do not use heredocs inside `exec ... bash -c`; nested quotes, backticks and `$()` break. Relative remote paths resolve against the box workdir, parent dirs are created, and the exec bit is kept. Text files only.
+
 ## Multi-step sessions: `up`, `exec`, `down`
 
 Use these when you need several commands against the same checkout (debugging, editing, a dev server).

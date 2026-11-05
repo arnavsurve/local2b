@@ -48,6 +48,11 @@ export const COMMAND_HELP = {
     summary: 'run a command in the box (default cwd: the repo checkout)',
     flags: [['--cwd dir', 'working directory in the box']],
   },
+  put: {
+    usage: 'l2b put <name> <local|-> <remote>',
+    summary: 'send a text file into a box (- reads stdin; parent dirs created, exec bit kept)',
+    flags: [],
+  },
   creds: {
     usage: 'l2b creds <name> [--repo o/r] [--doppler project/config]',
     summary: 'refresh GH token + doppler secrets',
