@@ -2,7 +2,7 @@ import { requirePositional } from '../args';
 import type { Command } from '../context';
 import { connectBox } from '../find-box';
 import { COMMAND_HELP } from '../help';
-import { decodeText, putContent, putLocalFile } from '../put';
+import { decodeText, putLocalFile } from '../put';
 
 export const put: Command = async ({ ctx, args }) => {
   const usage = COMMAND_HELP.put.usage;
@@ -12,11 +12,10 @@ export const put: Command = async ({ ctx, args }) => {
   const box = await connectBox({ ctx, name });
   const path =
     local === '-'
-      ? await putContent({
-          box,
+      ? await box.put({
+          path: remote,
           content: decodeText({ bytes: new Uint8Array(await Bun.stdin.arrayBuffer()), what: 'stdin' }),
           executable: false,
-          remote,
         })
       : await putLocalFile({ box, localPath: local, remote });
   console.log(path);

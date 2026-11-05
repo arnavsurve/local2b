@@ -1,4 +1,4 @@
-import { CommandFailedError } from './session';
+import { CommandFailedError } from '../providers/types';
 import type { Machine } from './machine';
 import { parentDir, shellQuote } from '../shell';
 

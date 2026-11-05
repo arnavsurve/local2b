@@ -3,7 +3,27 @@ import { requirePositional } from '../args';
 import type { Command } from '../context';
 import { COMMAND_HELP } from '../help';
 import { connectBox } from '../find-box';
-import { withEnv } from '../toolkit/session';
+import type { Terminal } from '../providers/types';
+
+const size = () => ({ cols: process.stdout.columns, rows: process.stdout.rows });
+
+/** This process's TTY, handed to the provider's `attach`. */
+const processTerminal: Terminal = {
+  size,
+  onInput(listener) {
+    const handler = (chunk: Buffer) => listener(new Uint8Array(chunk));
+    process.stdin.on('data', handler);
+    return () => process.stdin.off('data', handler);
+  },
+  onResize(listener) {
+    const handler = () => listener(size());
+    process.stdout.on('resize', handler);
+    return () => process.stdout.off('resize', handler);
+  },
+  write(data) {
+    process.stdout.write(data);
+  },
+};
 
 /** Interactive terminal in the box. Needs a real TTY on both stdin and stdout. */
 export const shell: Command = async ({ ctx, args }) => {
@@ -22,34 +42,12 @@ export const shell: Command = async ({ ctx, args }) => {
   }
 
   const box = await connectBox({ ctx, name });
-  const session = await box.shell({
-    cols: process.stdout.columns,
-    rows: process.stdout.rows,
-    cwd: values.cwd ?? box.workdir,
-    onData: (data) => {
-      process.stdout.write(data);
-    },
-  });
-
-  const onResize = () => {
-    void session
-      .resize({ cols: process.stdout.columns, rows: process.stdout.rows })
-      .catch(() => {});
-  };
-  process.stdout.on('resize', onResize);
   process.stdin.setRawMode(true);
-  process.stdin.on('data', (chunk: Buffer) => {
-    void session.sendInput(new Uint8Array(chunk)).catch(() => {});
-  });
   process.stdin.resume();
-
-  const loadEnv = `${withEnv({ homeDir: box.homeDir, cmd: 'clear' })}\n`;
-  await session.sendInput(new TextEncoder().encode(loadEnv));
-
   try {
-    process.exitCode = await session.wait();
+    const exitCode = await box.attach({ terminal: processTerminal, cwd: values.cwd ?? null });
+    if (exitCode !== null) process.exitCode = exitCode;
   } finally {
-    process.stdout.off('resize', onResize);
     process.stdin.setRawMode(false);
     process.stdin.pause();
   }

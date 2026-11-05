@@ -1,20 +1,5 @@
 import { readFileSync, statSync } from 'node:fs';
-import type { Machine } from './toolkit/machine';
-import { putFile } from './toolkit/files';
-
-export function putContent({
-  box,
-  content,
-  executable,
-  remote,
-}: {
-  box: Machine;
-  content: string;
-  executable: boolean;
-  remote: string;
-}) {
-  return putFile({ box, path: remote, content, executable });
-}
+import type { Box } from './providers/types';
 
 export function decodeText({ bytes, what }: { bytes: Uint8Array; what: string }) {
   try {
@@ -24,7 +9,7 @@ export function decodeText({ bytes, what }: { bytes: Uint8Array; what: string })
   }
 }
 
-export async function putLocalFile({ box, localPath, remote }: { box: Machine; localPath: string; remote: string }) {
+export async function putLocalFile({ box, localPath, remote }: { box: Box; localPath: string; remote: string }) {
   let bytes: Uint8Array;
   let executable: boolean;
   try {
@@ -34,5 +19,5 @@ export async function putLocalFile({ box, localPath, remote }: { box: Machine; l
     throw new Error(`cannot read ${localPath}: ${err instanceof Error ? err.message : err}`);
   }
   const content = decodeText({ bytes, what: localPath });
-  return putContent({ box, content, executable, remote });
+  return box.put({ path: remote, content, executable });
 }

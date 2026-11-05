@@ -1,46 +1,55 @@
-import { beforeAll, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, spyOn, test } from 'bun:test';
+import type { ExecOutput, StartOpts } from './providers/types';
 import { generatedBoxName, runOnce } from './run-once';
-import { fakeContext } from './test/fake-machine';
+import { fakeClock, fakeProvider } from './test/fake-provider';
 
-const opts = {
+let fake: ReturnType<typeof fakeProvider>;
+let quiet: ReturnType<typeof spyOn>;
+
+beforeEach(() => {
+  fake = fakeProvider({ id: 'fake', clock: fakeClock({ start: Date.now() }), failure: null });
+  quiet = spyOn(console, 'error').mockImplementation(() => {});
+});
+
+afterEach(() => {
+  quiet.mockRestore();
+  fake.cleanup();
+});
+
+const start: StartOpts = {
   name: 'run-test',
   repo: null,
   branch: null,
-  full: false,
-  install: null,
-  doppler: null,
+  source: 'bake',
   image: null,
+  idle: { minutes: 15 },
+  credentials: { variables: {}, git: null },
+  gitIdentity: null,
 };
 
-beforeAll(() => {
-  process.env.GH_TOKEN = 'test-token';
-});
+const once = ({ cmd, after, onOutput }: { cmd: string; after: 'destroy' | 'keep'; onOutput: (o: ExecOutput) => void }) =>
+  runOnce({ provider: fake.provider, start, cmd, label: cmd, after, onOutput });
 
 test('returns the command exit code and leaves no box behind', async () => {
-  const { ctx, alive } = fakeContext({ execExitCode: 3, failExecWhen: null, homeDir: '/home/user' });
-  const exitCode = await runOnce({ ctx, opts, cmd: 'yarn test', label: 'yarn test', keep: false });
-  expect(exitCode).toBe(3);
-  expect([...alive]).toEqual([]);
+  expect(await once({ cmd: 'exit 3', after: 'destroy', onOutput: () => {} })).toBe(3);
+  expect(fake.alive()).toEqual([]);
 });
 
-test('destroys the box even when the command blows up', async () => {
-  const { ctx, alive } = fakeContext({ execExitCode: 0, failExecWhen: 'explode', homeDir: '/home/user' });
-  await expect(runOnce({ ctx, opts, cmd: 'explode', label: 'explode', keep: false })).rejects.toThrow('exec blew up');
-  expect([...alive]).toEqual([]);
-});
-
-test('destroys the box when setup fails after it was created', async () => {
-  const { ctx, alive } = fakeContext({ execExitCode: 1, failExecWhen: null, homeDir: '/home/user' });
-  await expect(
-    runOnce({ ctx, opts: { ...opts, repo: 'o/r' }, cmd: 'true', label: 'true', keep: false })
-  ).rejects.toThrow('git clone failed');
-  expect([...alive]).toEqual([]);
+test('destroys the box even when handling the output blows up', async () => {
+  const run = once({
+    cmd: 'echo hi',
+    after: 'destroy',
+    onOutput: () => {
+      throw new Error('output sink failed');
+    },
+  });
+  await expect(run).rejects.toThrow('output sink failed');
+  expect(fake.alive()).toEqual([]);
 });
 
 test('keep leaves the box alive for follow-up commands', async () => {
-  const { ctx, alive } = fakeContext({ execExitCode: 0, failExecWhen: null, homeDir: '/home/user' });
-  await runOnce({ ctx, opts, cmd: 'true', label: 'true', keep: true });
-  expect([...alive]).toEqual(['run-test']);
+  await once({ cmd: 'true', after: 'keep', onOutput: () => {} });
+  expect(fake.alive()).toEqual(['run-test']);
 });
 
 test('generated names are unique and carry the repo name', () => {

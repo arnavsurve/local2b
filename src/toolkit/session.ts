@@ -1,26 +1,13 @@
-import { credentialHelperCommand, resolveHostToken, type ResolvedGitHost } from '../git-host';
-import type { Credentials, GitCredentials, GitIdentity } from '../providers/types';
+import { CommandFailedError, type Credentials, type GitCredentials, type GitIdentity } from '../providers/types';
+import { toEnvFile } from '../secrets';
+import { credentialHelperCommand } from './git-credentials';
 import type { Machine } from './machine';
 import { shellQuote } from '../shell';
-import {
-  loadSecrets,
-  toEnvFile,
-  type SecretSource,
-} from '../secrets';
 
 export const ENV_FILE = '/dev/shm/l2b.env';
 
 export const plainEnvFile = ({ homeDir }: { homeDir: string }) =>
   `${homeDir}/.l2b-env`;
-
-export class CommandFailedError extends Error {
-  constructor(
-    readonly what: string,
-    readonly exitCode: number
-  ) {
-    super(`${what} failed (exit ${exitCode})`);
-  }
-}
 
 /** Plain env is sourced first so a secret of the same name wins. */
 export function withEnv({ homeDir, cmd }: { homeDir: string; cmd: string }) {
@@ -28,38 +15,15 @@ export function withEnv({ homeDir, cmd }: { homeDir: string; cmd: string }) {
 }
 
 /**
- * Credentials are resolved locally at call time and written to the sandbox's
- * tmpfs, never baked into an image or written to its disk.
- */
-export async function pushCreds({
-  box,
-  sources,
-  host,
-}: {
-  box: Machine;
-  sources: SecretSource[];
-  host: ResolvedGitHost;
-}) {
-  const vars: Record<string, string> = {};
-  for (const source of sources) Object.assign(vars, await loadSecrets(source));
-  vars[host.tokenEnvVar] = await resolveHostToken(host);
-  await writeSecretsFile({ box, vars });
-}
-
-/**
  * Writes resolved credentials to the sandbox's tmpfs, never to its disk, and
  * never through a command line.
  */
 export async function writeCredentials({ box, credentials }: { box: Machine; credentials: Credentials }) {
-  await writeSecretsFile({ box, vars: credentials.variables });
-}
-
-async function writeSecretsFile({ box, vars }: { box: Machine; vars: Record<string, string> }) {
   // /dev/shm is sticky and world-writable, so with fs.protected_regular a
   // file-API write (often a different uid) cannot reopen an existing file
   // owned by the box user. Removing it first lets a refresh recreate it.
   await box.exec({ cmd: `rm -f ${ENV_FILE}`, cwd: '/', onOutput: () => {} });
-  await box.writeFile({ path: ENV_FILE, content: toEnvFile(vars) });
+  await box.writeFile({ path: ENV_FILE, content: toEnvFile(credentials.variables) });
   await box.exec({ cmd: `chmod 600 ${ENV_FILE}`, cwd: '/', onOutput: () => {} });
 }
 

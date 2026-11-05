@@ -1,108 +1,100 @@
 import { afterEach, beforeEach, expect, spyOn, test } from 'bun:test';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { bake } from './commands/bake';
-import { provisionBox } from './provision';
-import { snapshotName } from './toolkit/layout';
-import { lookupSnapshot, recordBake } from './toolkit/bake-records';
-import { fakeContext } from './test/fake-machine';
+import { up } from './commands/up';
+import { repoSpecFor } from './repo';
+import { fakeClock, fakeContext, type FakeClock } from './test/fake-provider';
 
 const HOUR = 3_600_000;
-let stateDir = '';
+const cleanups: (() => void)[] = [];
 
 beforeEach(() => {
-  stateDir = mkdtempSync(join(tmpdir(), 'l2b-state-'));
-  process.env.XDG_STATE_HOME = stateDir;
   process.env.GH_TOKEN = 'test-token';
 });
 
 afterEach(() => {
-  delete process.env.XDG_STATE_HOME;
-  rmSync(stateDir, { recursive: true, force: true });
+  for (const cleanup of cleanups.splice(0)) cleanup();
 });
 
-const hoursAgo = (hours: number) => new Date(Date.now() - hours * HOUR);
-
-function seedSnapshot({ snapshots, ageHours }: { snapshots: Set<string>; ageHours: number | null }) {
-  snapshots.add(snapshotName('o/r'));
-  if (ageHours === null) return Promise.resolve();
-  return recordBake({ provider: 'fake', repo: 'o/r', at: hoursAgo(ageHours) });
+/** A fake provider whose clock reads `ageHours` ago when the repo is baked, then catches up to now. */
+async function setup({ ageHours, config }: { ageHours: number | null; config: Record<string, unknown> }) {
+  const clock: FakeClock = fakeClock({ start: Date.now() - (ageHours ?? 0) * HOUR });
+  const made = fakeContext({ providers: [{ id: 'fake', failure: null }], configured: ['fake'], flag: null, env: null, config, clock });
+  cleanups.push(made.cleanup);
+  await made.addOrigin({ repo: 'o/r' });
+  const fake = made.fake('fake');
+  const spec = repoSpecFor({ config: made.ctx.config, repo: 'o/r', install: null, warm: null, baseBranch: null });
+  if (ageHours !== null) {
+    await fake.provider.bake({ repo: spec, credentials: { variables: {}, git: null }, image: null });
+    clock.advance({ ms: ageHours * HOUR });
+  }
+  return { ...made, provider: fake.provider, history: fake.history, spec };
 }
 
-test('lookupSnapshot has no snapshot until one exists, and no age until a bake is recorded', async () => {
-  const { ctx, snapshots } = fakeContext({ execExitCode: 0, failExecWhen: null, homeDir: '/home/user' });
-  expect(await lookupSnapshot({ provider: ctx.provider, repo: 'o/r' })).toBeNull();
-  await seedSnapshot({ snapshots, ageHours: null });
-  expect((await lookupSnapshot({ provider: ctx.provider, repo: 'o/r' }))?.createdAt).toBeNull();
-  await recordBake({ provider: 'fake', repo: 'o/r', at: hoursAgo(1) });
-  const found = await lookupSnapshot({ provider: ctx.provider, repo: 'o/r' });
-  expect(found?.createdAt?.getTime()).toBeCloseTo(hoursAgo(1).getTime(), -4);
+const captured = async (task: () => Promise<void>) => {
+  const log = spyOn(console, 'log').mockImplementation(() => {});
+  const err = spyOn(console, 'error').mockImplementation(() => {});
+  try {
+    await task();
+    return { out: log.mock.calls.flat().map(String), err: err.mock.calls.flat().map(String) };
+  } finally {
+    log.mockRestore();
+    err.mockRestore();
+  }
+};
+
+test('bake --if-older-than skips a bake that is fresh enough', async () => {
+  const { ctx, history } = await setup({ ageHours: 2, config: {} });
+  const ran = history.length;
+  const { out } = await captured(() => bake({ ctx, args: ['o/r', '--if-older-than', '12h'] }));
+  expect(out.join('\n')).toContain('snapshot for o/r is 2h old, newer than 12h; skipping bake');
+  expect(history.length).toBe(ran);
 });
 
-test('bake --if-older-than skips a snapshot that is fresh enough', async () => {
-  const { ctx, snapshots, executed, alive } = fakeContext({ execExitCode: 0, failExecWhen: null, homeDir: '/home/user' });
-  await seedSnapshot({ snapshots, ageHours: 2 });
-  const log = spyOn(console, 'log').mockImplementation(() => {});
-  await bake({ ctx, args: ['o/r', '--if-older-than', '12h'] });
-  expect(log.mock.calls.flat().join('\n')).toContain('skipping');
-  log.mockRestore();
-  expect(executed).toEqual([]);
-  expect([...alive]).toEqual([]);
+test('bake --if-older-than re-bakes an older bake and reports what it made', async () => {
+  const { ctx, provider, spec } = await setup({ ageHours: 30, config: {} });
+  const { out } = await captured(() => bake({ ctx, args: ['o/r', '--if-older-than', '12h'] }));
+  expect(out).toContain('baked fake:o/r');
+  expect(Date.now() - ((await provider.bakedAt({ repo: spec }))?.getTime() ?? 0)).toBeLessThan(60_000);
 });
 
-test('bake --if-older-than re-bakes an older snapshot and records the new bake time', async () => {
-  const { ctx, snapshots, executed } = fakeContext({ execExitCode: 0, failExecWhen: null, homeDir: '/home/user' });
-  await seedSnapshot({ snapshots, ageHours: 30 });
-  const log = spyOn(console, 'log').mockImplementation(() => {});
-  await bake({ ctx, args: ['o/r', '--if-older-than', '12h'] });
-  log.mockRestore();
-  expect(executed.length).toBeGreaterThan(0);
-  const found = await lookupSnapshot({ provider: ctx.provider, repo: 'o/r' });
-  expect(Date.now() - (found?.createdAt?.getTime() ?? 0)).toBeLessThan(60_000);
-});
-
-test.each([false, true])('bake --if-older-than re-bakes when the age is unknown (snapshot exists: %p)', async (exists) => {
-  const { ctx, snapshots, executed } = fakeContext({ execExitCode: 0, failExecWhen: null, homeDir: '/home/user' });
-  if (exists) await seedSnapshot({ snapshots, ageHours: null });
-  const log = spyOn(console, 'log').mockImplementation(() => {});
-  await bake({ ctx, args: ['o/r', '--if-older-than', '12h'] });
-  log.mockRestore();
-  expect(executed.length).toBeGreaterThan(0);
+test('bake --if-older-than bakes when there is no bake yet', async () => {
+  const { ctx, provider, spec } = await setup({ ageHours: null, config: {} });
+  await captured(() => bake({ ctx, args: ['o/r', '--if-older-than', '12h'] }));
+  expect(await provider.bakedAt({ repo: spec })).not.toBeNull();
 });
 
 test('bake rejects a malformed --if-older-than before doing any work', async () => {
-  const { ctx, executed } = fakeContext({ execExitCode: 0, failExecWhen: null, homeDir: '/home/user' });
+  const { ctx, history } = await setup({ ageHours: null, config: {} });
   await expect(bake({ ctx, args: ['o/r', '--if-older-than', 'soon'] })).rejects.toThrow('bad duration');
-  expect(executed).toEqual([]);
+  expect(history).toEqual([]);
 });
 
-async function provisionHints({ ageHours, staleSnapshotHours }: { ageHours: number | null; staleSnapshotHours: number | null }) {
-  const { ctx, snapshots } = fakeContext({ execExitCode: 0, failExecWhen: null, homeDir: '/home/user' });
-  if (staleSnapshotHours !== null) ctx.config.staleSnapshotHours = staleSnapshotHours;
-  await seedSnapshot({ snapshots, ageHours });
-  const err = spyOn(console, 'error').mockImplementation(() => {});
-  await provisionBox({
-    ctx,
-    opts: { name: 'b', repo: 'o/r', branch: null, full: false, install: null, doppler: null, image: null },
-  });
-  const lines = err.mock.calls.flat().map(String);
-  err.mockRestore();
-  return lines.filter((line) => line.includes('l2b bake'));
+async function upHints({ ageHours, staleSnapshotHours }: { ageHours: number | null; staleSnapshotHours: number | null }) {
+  const { ctx } = await setup({ ageHours, config: staleSnapshotHours === null ? {} : { staleSnapshotHours } });
+  const { err } = await captured(() => up({ ctx, args: ['b', '--repo', 'o/r'] }));
+  return err.filter((line) => line.includes('l2b bake'));
 }
 
-test('up hints to re-bake when the snapshot is older than the default 72h', async () => {
-  const hints = await provisionHints({ ageHours: 100, staleSnapshotHours: null });
+test('up hints to re-bake when the bake is older than the default 72h', async () => {
+  const hints = await upHints({ ageHours: 100, staleSnapshotHours: null });
   expect(hints).toHaveLength(1);
   expect(hints[0]).toContain('l2b bake o/r');
 });
 
-test('up stays quiet for a fresh snapshot or an unknown age', async () => {
-  expect(await provisionHints({ ageHours: 10, staleSnapshotHours: null })).toEqual([]);
-  expect(await provisionHints({ ageHours: null, staleSnapshotHours: null })).toEqual([]);
+test('up stays quiet for a fresh bake or none at all', async () => {
+  expect(await upHints({ ageHours: 10, staleSnapshotHours: null })).toEqual([]);
+  expect(await upHints({ ageHours: null, staleSnapshotHours: null })).toEqual([]);
 });
 
 test('staleSnapshotHours is configurable', async () => {
-  expect(await provisionHints({ ageHours: 10, staleSnapshotHours: 5 })).toHaveLength(1);
-  expect(await provisionHints({ ageHours: 100, staleSnapshotHours: 200 })).toEqual([]);
+  expect(await upHints({ ageHours: 10, staleSnapshotHours: 5 })).toHaveLength(1);
+  expect(await upHints({ ageHours: 100, staleSnapshotHours: 200 })).toEqual([]);
+});
+
+test('up --full ignores the bake and clones the full history', async () => {
+  const { ctx, history } = await setup({ ageHours: 1, config: {} });
+  const ran = history.length;
+  const { out } = await captured(() => up({ ctx, args: ['b', '--repo', 'o/r', '--full', '--branch', 'feature/contract'] }));
+  expect(history.slice(ran).some((cmd) => cmd.includes('git clone'))).toBe(true);
+  expect(out.join('\n')).toContain('b ready');
 });

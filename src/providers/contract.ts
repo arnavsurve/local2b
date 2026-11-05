@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { randomBytes } from 'node:crypto';
-import { runOnceWith } from '../run-once';
+import { runOnce as runOnceOn } from '../run-once';
 import { UnsupportedError, type Box, type Credentials, type ExecOutput, type Provider, type RepoSpec } from './types';
 
 /** What a provider under test supplies to the contract suite. */
@@ -291,7 +291,7 @@ export function describeProviderContract({
 
     const runOnce = ({ cmd, onOutput }: { cmd: string; onOutput: (o: ExecOutput) => void }) => {
       const boxName = uniqueName('contract-run');
-      const run = runOnceWith({
+      const run = runOnceOn({
         provider: subject.provider,
         start: {
           name: boxName,

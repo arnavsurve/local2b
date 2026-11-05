@@ -4,7 +4,7 @@ import type { Command } from '../context';
 import { connectBox } from '../find-box';
 import { COMMAND_HELP, usageError } from '../help';
 import { startJob } from '../jobs';
-import { run } from '../toolkit/session';
+import { toProcess } from '../start';
 
 export const exec: Command = async ({ ctx, args }) => {
   const { head, tail } = splitOnDoubleDash(args);
@@ -18,15 +18,10 @@ export const exec: Command = async ({ ctx, args }) => {
 
   const box = await connectBox({ ctx, name });
   if (values.detach) {
-    const id = await startJob({ box, cwd: values.cwd ?? box.workdir, cmd: joinCommand(tail) });
+    const id = await startJob({ box, cwd: values.cwd ?? null, cmd: joinCommand(tail) });
     console.log(id);
     console.error(`started; check with: l2b logs ${name} ${id}`);
     return;
   }
-  const exitCode = await run({
-    box,
-    cwd: values.cwd ?? box.workdir,
-    cmd: joinCommand(tail),
-  });
-  process.exitCode = exitCode;
+  process.exitCode = await box.exec({ cmd: joinCommand(tail), cwd: values.cwd ?? null, onOutput: toProcess });
 };

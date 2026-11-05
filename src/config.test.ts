@@ -120,3 +120,9 @@ test('a filter that could smuggle shell is rejected', () => {
   expect(configSchema.safeParse({ repos: { 'o/r': { clone: { filter: '$(id)' } } } }).success).toBe(false);
   expect(configSchema.safeParse({ clone: { filter: 'combine:blob:none+tree:0' } }).success).toBe(true);
 });
+
+test('idle.action is a deprecated alias for e2b.onIdle, and e2b.onIdle wins', () => {
+  expect(configSchema.parse({}).e2b.onIdle).toBe('kill');
+  expect(configSchema.parse({ idle: { action: 'pause' } }).e2b.onIdle).toBe('pause');
+  expect(configSchema.parse({ idle: { action: 'pause' }, e2b: { onIdle: 'kill' } }).e2b.onIdle).toBe('kill');
+});

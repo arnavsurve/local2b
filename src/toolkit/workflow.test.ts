@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { $ } from 'bun';
 import type { Credentials, RepoSpec, StartOpts } from '../providers/types';
-import { fakeProvider as fakeMachineHost } from '../test/fake-machine';
+import { fakeMachineHost } from '../test/fake-machine';
 import { snapshotName } from './layout';
 import { ENV_FILE, plainEnvFile } from './session';
 import { machineWorkflow } from './workflow';
@@ -49,7 +49,7 @@ const startOpts: StartOpts = {
 };
 
 function setup({ homeDir, execExitCode }: { homeDir: string; execExitCode: number }) {
-  const fake = fakeMachineHost({ id: 'fake', execExitCode, failExecWhen: null, homeDir, failure: null });
+  const fake = fakeMachineHost({ id: 'fake', execExitCode, homeDir, failure: null });
   return { ...fake, workflow: machineWorkflow({ host: fake.provider }) };
 }
 

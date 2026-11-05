@@ -1,11 +1,11 @@
 import { expect, test } from 'bun:test';
-import { fakeContext } from '../test/fake-machine';
+import { fakeMachineHost } from '../test/fake-machine';
 import { putFile, remotePath } from './files';
 
 const box = async () => {
-  const fake = fakeContext({ execExitCode: 0, failExecWhen: null, homeDir: '/home/user' });
-  await fake.ctx.provider.create({ name: 'b', image: 'i', workdir: '/home/user/repo', idle: null });
-  return { ...fake, box: await fake.ctx.provider.connect({ name: 'b' }) };
+  const fake = fakeMachineHost({ id: 'fake', execExitCode: 0, homeDir: '/home/user', failure: null });
+  await fake.provider.create({ name: 'b', image: 'i', workdir: '/home/user/repo', idle: null });
+  return { ...fake, box: await fake.provider.connect({ name: 'b' }) };
 };
 
 test('remotePath resolves relative, home and absolute paths', () => {

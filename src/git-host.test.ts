@@ -1,7 +1,5 @@
 import { afterEach, expect, test } from 'bun:test';
-import { $ } from 'bun';
 import {
-  credentialHelperCommand,
   gitHostSchema,
   hostFor,
   remoteUrl,
@@ -70,31 +68,6 @@ test('credential username and token env var per host', () => {
   expect(generic.tokenEnvVar).toBe('L2B_GIT_TOKEN');
 });
 
-test('github credential helper is scoped to github.com with the original helper body', () => {
-  expect(credentialHelperCommand(github)).toBe(
-    `git config --global 'credential.https://github.com.helper' '!f() { echo username=x-access-token; echo password=$GH_TOKEN; }; f'`
-  );
-});
-
-test('credential helper for other hosts is scoped to their base URL', () => {
-  expect(credentialHelperCommand(gitlab)).toBe(
-    `git config --global 'credential.https://gitlab.example.com.helper' '!f() { echo username=oauth2; echo password=$GITLAB_TOKEN; }; f'`
-  );
-  expect(credentialHelperCommand(generic)).toBe(
-    `git config --global 'credential.https://git.example.com.helper' '!f() { echo username=bot; echo password=$L2B_GIT_TOKEN; }; f'`
-  );
-});
-
-test('the credential helper really answers git with the exported token', async () => {
-  const cmd = credentialHelperCommand(gitlab).replace('--global', '--local');
-  const dir = (await $`mktemp -d`.text()).trim();
-  const script = `cd ${dir} && git init -q && ${cmd} && export GITLAB_TOKEN=glpat-1 && printf 'protocol=https\nhost=gitlab.example.com\n\n' | git credential fill`;
-  const out = (await $`bash -c ${script}`.quiet()).text();
-  expect(out).toContain('username=oauth2');
-  expect(out).toContain('password=glpat-1');
-  await $`rm -rf ${dir}`.quiet();
-});
-
 test('github token comes from GH_TOKEN, then GITHUB_TOKEN', async () => {
   process.env.GITHUB_TOKEN = 'b';
   expect(await resolveHostToken(github)).toBe('b');
@@ -127,11 +100,8 @@ const ghes = resolveGitHost(
   gitHostSchema.parse({ type: 'github', baseUrl: 'https://ghe.example.com/' })
 );
 
-test('GitHub Enterprise Server uses its base URL for the remote and the helper origin', () => {
+test('GitHub Enterprise Server uses its base URL for the remote', () => {
   expect(remoteUrl({ host: ghes, repo: 'o/r' })).toBe('https://ghe.example.com/o/r.git');
-  expect(credentialHelperCommand(ghes)).toBe(
-    `git config --global 'credential.https://ghe.example.com.helper' '!f() { echo username=x-access-token; echo password=$GH_TOKEN; }; f'`
-  );
 });
 
 test('the CLI fallback names the host only when it is not the default', () => {
@@ -164,7 +134,6 @@ test('the CLI fallback names the host only when it is not the default', () => {
 test('generic tokenEnvVar is exported name and helper variable', () => {
   const host = resolveGitHost(gitHostSchema.parse({ ...genericConfig, tokenEnvVar: 'BB_TOKEN' }));
   expect(host.tokenEnvVar).toBe('BB_TOKEN');
-  expect(credentialHelperCommand(host)).toContain('password=$BB_TOKEN;');
 });
 
 test('presets are fully described by the resolved shape', () => {

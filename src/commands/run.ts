@@ -3,6 +3,7 @@ import { joinCommand, splitOnDoubleDash } from '../args';
 import { selectForRepo, type Command } from '../context';
 import { usageError } from '../help';
 import { generatedBoxName, runOnce } from '../run-once';
+import { startOptsFor, toProcess, warnIfStale } from '../start';
 
 /** One call for one-off work: box up, run, box gone. Exits with the command's exit code. */
 export const run: Command = async ({ ctx: base, args }) => {
@@ -24,21 +25,25 @@ export const run: Command = async ({ ctx: base, args }) => {
   const repo = values.repo ?? null;
   const ctx = selectForRepo({ ctx: base, repo });
   const name = values.name ?? generatedBoxName({ repo });
+  const start = await startOptsFor({
+    ctx,
+    name,
+    repo,
+    branch: values.branch ?? null,
+    source: values.full ? 'fresh' : 'bake',
+    install: values.install ?? null,
+    doppler: values.doppler ?? null,
+    image: values.image ?? null,
+  });
+  await warnIfStale({ ctx, start });
 
   process.exitCode = await runOnce({
-    ctx,
-    keep: values.keep,
+    provider: ctx.provider,
+    start,
     cmd: joinCommand(tail),
     label: tail.join(' '),
-    opts: {
-      name,
-      repo,
-      branch: values.branch ?? null,
-      full: values.full,
-      install: values.install ?? null,
-      doppler: values.doppler ?? null,
-      image: values.image ?? null,
-    },
+    after: values.keep ? 'keep' : 'destroy',
+    onOutput: toProcess,
   });
   if (values.keep) console.error(`l2b: box kept: ${name} (l2b exec ${name} -- <cmd>, l2b down ${name})`);
 };
