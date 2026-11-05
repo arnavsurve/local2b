@@ -4,7 +4,7 @@ import { hostFor, remoteUrl } from '../git-host';
 import { parseDuration } from '../duration';
 import { bakeScript } from '../git-scripts';
 import { checkoutDir, mirrorDir, repoName, snapshotName } from '../repo';
-import type { Command } from '../context';
+import { selectForRepo, type Command } from '../context';
 import { step } from '../progress';
 import { configureGit, pushCreds, pushEnv, runChecked, scrubCreds } from '../session';
 import { lookupSnapshot, formatAge, recordBake } from '../snapshots';
@@ -16,7 +16,7 @@ import { resolveImage, secretSourcesFor } from '../sources';
  * so each box pays for a quick incremental install instead of a full one. Credentials are used to clone, then scrubbed,
  * and the snapshot is filesystem-only so no memory (and no secret) is kept.
  */
-export const bake: Command = async ({ ctx, args }) => {
+export const bake: Command = async ({ ctx: base, args }) => {
   const { values, positionals } = parseArgs({
     args,
     allowPositionals: true,
@@ -34,6 +34,7 @@ export const bake: Command = async ({ ctx, args }) => {
     index: 0,
     usage: 'l2b bake <owner/repo>',
   });
+  const ctx = selectForRepo({ ctx: base, repo });
   const host = hostFor({ config: ctx.config, repo });
   const skipIfNewerThanMs = values['if-older-than'] ? parseDuration(values['if-older-than']) : null;
   if (skipIfNewerThanMs !== null) {

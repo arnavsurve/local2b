@@ -1,6 +1,7 @@
 import { parseArgs } from 'node:util';
 import { requirePositional } from '../args';
 import type { Command } from '../context';
+import { connectBox } from '../find-box';
 import { withEnv } from '../session';
 
 /** Interactive terminal in the box. Needs a real TTY on both stdin and stdout. */
@@ -19,7 +20,7 @@ export const shell: Command = async ({ ctx, args }) => {
     throw new Error('l2b shell needs an interactive terminal; use `l2b exec` from scripts and agents');
   }
 
-  const box = await ctx.provider.connect({ name });
+  const box = await connectBox({ ctx, name });
   const session = await box.shell({
     cols: process.stdout.columns,
     rows: process.stdout.rows,

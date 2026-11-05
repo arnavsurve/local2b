@@ -1,8 +1,8 @@
 import { Sandbox, Template } from 'e2b';
-import type { Box, IdlePolicy, Provider } from '../types';
+import { ProviderAuthError, type Box, type IdlePolicy, type Provider } from '../types';
 import { withHeartbeat } from '../../keepalive';
 import type { Config } from '../../config';
-import { resolveValue } from '../../secrets';
+import { resolveValue, type ValueRef } from '../../secrets';
 import { devTemplate } from './template';
 import { snapshotHasName } from './snapshot-match';
 
@@ -89,6 +89,22 @@ function wrapBox({
   };
 }
 
+function describeRef({ ref }: { ref: ValueRef }) {
+  switch (ref.from) {
+    case 'env':
+      return `set ${ref.name}, or point e2b.apiKey at another value reference`;
+    case 'file':
+      return `put the key in ${ref.path}, or change e2b.apiKey`;
+    case 'doppler':
+    case 'command':
+      return 'check the e2b.apiKey value reference in your config';
+    default: {
+      const unreachable: never = ref;
+      throw new Error(`unknown value ref: ${JSON.stringify(unreachable)}`);
+    }
+  }
+}
+
 export function createE2bProvider({
   config,
   idle,
@@ -96,7 +112,17 @@ export function createE2bProvider({
   config: Config['e2b'];
   idle: IdlePolicy;
 }): Provider {
-  const apiKey = () => resolveValue(config.apiKey);
+  const apiKey = async () => {
+    try {
+      return await resolveValue(config.apiKey);
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : String(err);
+      throw new ProviderAuthError({
+        provider: 'e2b',
+        hint: `${reason}; ${describeRef({ ref: config.apiKey })}`,
+      });
+    }
+  };
 
   async function findInfo({ name }: { name: string }) {
     const paginator = Sandbox.list({

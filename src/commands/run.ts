@@ -1,13 +1,13 @@
 import { parseArgs } from 'node:util';
 import { joinCommand, splitOnDoubleDash } from '../args';
-import type { Command } from '../context';
+import { selectForRepo, type Command } from '../context';
 import { generatedBoxName, runOnce } from '../run-once';
 
 const USAGE =
   'l2b run [--repo owner/repo] [--branch b] [--keep] [--name n] -- <cmd...>';
 
 /** One call for one-off work: box up, run, box gone. Exits with the command's exit code. */
-export const run: Command = async ({ ctx, args }) => {
+export const run: Command = async ({ ctx: base, args }) => {
   const { head, tail } = splitOnDoubleDash(args);
   if (tail.length === 0) throw new Error(`usage: ${USAGE}`);
   const { values } = parseArgs({
@@ -24,6 +24,7 @@ export const run: Command = async ({ ctx, args }) => {
     },
   });
   const repo = values.repo ?? null;
+  const ctx = selectForRepo({ ctx: base, repo });
   const name = values.name ?? generatedBoxName({ repo });
 
   process.exitCode = await runOnce({

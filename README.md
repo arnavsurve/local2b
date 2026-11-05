@@ -86,7 +86,7 @@ A command reference trims one trailing newline and fails on empty output. Tools 
 
 | Key | Default | Meaning |
 | --- | --- | --- |
-| `provider` | `"e2b"` | Sandbox provider (`e2b`) |
+| `provider` | `"e2b"` | Default sandbox provider (`e2b`). See Providers |
 | `image` | provider default | Base image override |
 | `secrets` | `[]` | Sources pushed into every box. See Secret sources |
 | `gitHost` | `{ "type": "github" }` | See Git hosts |
@@ -99,8 +99,26 @@ A command reference trims one trailing newline and fails on empty output. Tools 
 | `repos.<o/r>.warm` | none | Runs at bake only (codegen, builds). Output ships in the snapshot |
 | `repos.<o/r>.env` | `{}` | Plain, non-secret variables set in every box for this repo |
 | `repos.<o/r>.gitHost` | global | Per-repo override |
+| `repos.<o/r>.provider` | global `provider` | Provider used for this repo |
 
 `baseBranch` and `warm` apply on the next `l2b bake`.
+
+## Providers
+
+Several providers can be configured and used side by side. `up`, `run`, `bake` and `image build` use one provider, chosen in this order:
+
+1. `--provider <id>`, accepted anywhere before `--`
+2. `L2B_PROVIDER`
+3. `repos.<o/r>.provider`
+4. the top-level `provider`
+
+An unknown id fails and lists the known ones. Snapshots and bake times are kept per provider, so bake a repo on each provider you use it with.
+
+Each provider has its own config block with its own API key, such as `e2b` below. A provider counts as configured when its block is present or it is the default.
+
+`exec`, `shell`, `url`, `down`, `pause` and `creds` address a box by name. With `--provider` they use that provider. Without it they look the name up on every configured provider at once. One match is used. No match gives the usual "no sandbox named" error. A name on several providers fails and asks for `--provider`. A provider with no usable API key is skipped in this lookup, but an explicit `--provider` for it fails and names the key to set.
+
+`ls` lists boxes from every configured provider, with the provider id in the last column. A provider that fails prints one warning on stderr and the rest still list.
 
 ### e2b
 
