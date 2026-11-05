@@ -72,3 +72,54 @@ test('the fallback clone uses the configured depth and filter, and --full drops 
   expect(full).not.toContain('--depth');
   expect(full).toContain('--filter=blob:none');
 });
+
+const installRuns = ({ executed }: { executed: string[] }) =>
+  executed.filter((cmd) => /yarn|bun install|npm|pnpm/.test(cmd) && !cmd.includes('git '));
+
+async function context({ snapshot }: { snapshot: boolean }) {
+  const fake = fakeContext({ execExitCode: 0, failExecWhen: null, homeDir: '/srv/dan' });
+  fake.rootFiles.push('package.json', 'yarn.lock', '.yarnrc.yml', 'src');
+  if (snapshot) {
+    const baker = await fake.ctx.provider.create({ name: 'baker', image: 'i', workdir: '/w' });
+    await baker.snapshot({ name: snapshotName('o/widgets') });
+  }
+  fake.executed.length = 0;
+  return fake;
+}
+
+test.each([
+  { path: 'snapshot', snapshot: true },
+  { path: 'clone', snapshot: false },
+])('detects and runs the install command on the $path path', async ({ snapshot }) => {
+  const { ctx, executed } = await context({ snapshot });
+  await provisionBox({ ctx, opts });
+  expect(installRuns({ executed })).toContain('for f in /srv/dan/.l2b-env /dev/shm/l2b.env; do [ -f $f ] && . $f; done; yarn install --immutable');
+});
+
+test.each([
+  { path: 'snapshot', snapshot: true },
+  { path: 'clone', snapshot: false },
+])('a configured install overrides detection on the $path path', async ({ snapshot }) => {
+  const { ctx, executed } = await context({ snapshot });
+  await provisionBox({ ctx, opts: { ...opts, install: 'make deps' } });
+  expect(executed.some((cmd) => cmd.endsWith('; make deps'))).toBe(true);
+  expect(executed.join('\n')).not.toContain('yarn install');
+});
+
+test.each([
+  { path: 'snapshot', snapshot: true },
+  { path: 'clone', snapshot: false },
+])('an empty install runs nothing on the $path path', async ({ snapshot }) => {
+  const { ctx, executed } = await context({ snapshot });
+  await provisionBox({ ctx, opts: { ...opts, install: '' } });
+  expect(executed).not.toContain('ls -A');
+  expect(installRuns({ executed })).toEqual([]);
+});
+
+test('an unrecognised checkout installs nothing and still provisions', async () => {
+  const { ctx, executed, rootFiles } = await context({ snapshot: false });
+  rootFiles.length = 0;
+  rootFiles.push('go.mod');
+  await provisionBox({ ctx, opts });
+  expect(installRuns({ executed })).toEqual([]);
+});

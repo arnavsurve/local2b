@@ -6,6 +6,7 @@ import { parseDuration } from '../duration';
 import { bakeScript } from '../git-scripts';
 import { checkoutDir, mirrorDir, repoName, snapshotName } from '../repo';
 import { selectForRepo, type Command } from '../context';
+import { describeInstall, resolveInstall } from '../install';
 import { step } from '../progress';
 import { configureGit, pushCreds, pushEnv, runChecked, scrubCreds } from '../session';
 import { lookupSnapshot, formatAge, recordBake } from '../snapshots';
@@ -77,13 +78,28 @@ export const bake: Command = async ({ ctx: base, args }) => {
       remote: remoteUrl({ host, repo }),
       mirror: clone.strategy === 'mirror' ? mirrorDir({ homeDir: box.homeDir, repo }) : null,
       checkout: checkoutDir({ homeDir: box.homeDir, repo }),
-      install: values.install ?? ctx.config.repos[repo]?.install ?? null,
-      warm: values.warm ?? ctx.config.repos[repo]?.warm ?? null,
+      install: null,
+      warm: null,
       branch: values.branch ?? ctx.config.repos[repo]?.baseBranch ?? null,
       depth: clone.depth,
       filter: clone.filter,
     }),
   });
+  const checkout = checkoutDir({ homeDir: box.homeDir, repo });
+  const configured = values.install ?? ctx.config.repos[repo]?.install ?? null;
+  const resolved = configured === '' ? null : await resolveInstall({ box, dir: checkout, configured });
+  if (configured !== '') step(describeInstall({ install: resolved }));
+  const prepare = [resolved?.command ?? null, values.warm ?? ctx.config.repos[repo]?.warm ?? null].filter(
+    (cmd) => cmd !== null
+  );
+  if (prepare.length > 0) {
+    await runChecked({
+      box,
+      cwd: checkout,
+      what: `bake install (sandbox ${bakeName} left up for inspection)`,
+      cmd: prepare.join(' && '),
+    });
+  }
 
   step('snapshotting');
   await scrubCreds({ box });

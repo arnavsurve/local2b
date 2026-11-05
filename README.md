@@ -99,7 +99,7 @@ A command reference trims one trailing newline and fails on empty output. Tools 
 | `cloneDepth` | none | Kept for compatibility; the global default for `clone.depth`. Prefer `clone.depth` |
 | `staleSnapshotHours` | `72` | `up` and `run` hint to re-bake past this age |
 | `repos.<o/r>.baseBranch` | repo default | Branch the snapshot is baked from |
-| `repos.<o/r>.install` | none | Runs on every `up`. Keep it incremental |
+| `repos.<o/r>.install` | detected from lockfile | Runs on every `up` and at bake. Keep it incremental. `""` runs nothing |
 | `repos.<o/r>.warm` | none | Runs at bake only (codegen, builds). Output ships in the snapshot |
 | `repos.<o/r>.env` | `{}` | Plain, non-secret variables set in every box for this repo |
 | `repos.<o/r>.gitHost` | global | Per-repo override |
@@ -109,6 +109,10 @@ A command reference trims one trailing newline and fails on empty output. Tools 
 `baseBranch`, `warm` and `clone` apply on the next `l2b bake`, which prints the strategy it used. `up` follows what the snapshot contains: it uses a baked mirror if one exists and otherwise fetches in place, so changing the strategy never breaks an existing snapshot. `--full` on `up` or `run` clones without a snapshot at full depth and keeps the filter.
 
 Use `plain` for small repos. A mirror pays off when the repo is large and boxes switch branches often; for a small repo it adds a second copy and nothing else.
+
+### Install detection
+
+When `install` is not set, `l2b` looks at the checkout root and picks a command: `bun.lock` or `bun.lockb` runs `bun install --frozen-lockfile`, `pnpm-lock.yaml` runs `pnpm install --frozen-lockfile`, `yarn.lock` runs `yarn install --immutable` (with `.yarnrc.yml`) or `yarn install --frozen-lockfile`, `package-lock.json` runs `npm ci`, and a bare `package.json` runs `npm install`. The first match in that order wins. Detection covers JavaScript only. For other ecosystems set `install` yourself; with no match, nothing is installed. A configured string always wins, and `""` disables installing.
 
 ## Providers
 
