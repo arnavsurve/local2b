@@ -8,7 +8,7 @@ That starts a box, checks out the branch with dependencies installed, runs the c
 
 ## What it does
 
-- **Your credentials, never baked in.** Your `gh` token and any Doppler or env secrets are pushed to the box's tmpfs on each call. Images and snapshots never contain them.
+- **Your credentials, never baked in.** Your `gh` token and any configured secrets are pushed to the box's tmpfs on each call. Images and snapshots never contain them.
 - **Fast starts.** Bake a repo once. A box is then a branch switch plus an incremental install, about a minute instead of a clone and full install.
 - **Cleanup you can't forget.** `run` always destroys its box, and idle boxes expire server-side.
 - **Built for agents.** A skill says when to use it, commands default to the repo checkout, and every `run` ends with `command exited <code>`.
@@ -17,7 +17,7 @@ Limits: you pay your provider for the compute, and you re-bake when a repo drift
 
 ## Quick start
 
-You need [Bun](https://bun.sh), an API key for your provider, and `gh` (or `GH_TOKEN`). Doppler is optional.
+You need [Bun](https://bun.sh), an API key for your provider, and `gh` (or `GH_TOKEN`). A secret source is optional.
 
     bun install
     mkdir -p ~/.config/l2b && cp config.example.json ~/.config/l2b/config.json
@@ -53,7 +53,32 @@ Nothing secret goes into an image or snapshot. At call time, l2b resolves a git 
 
 Anything the box runs can read those secrets, and a paused box keeps them in memory. Use a scoped `GH_TOKEN` rather than your full `gh` login if that matters to you.
 
-Secret sources are `doppler` (`--doppler project/config` or `secrets` in config) or `env` (local variable names). A provider's API key uses the same mechanism through a value reference, for example `{ "from": "doppler", "project": "p", "config": "dev", "name": "E2B_API_KEY" }` or `{ "from": "env", "name": "E2B_API_KEY" }`.
+## Secret sources
+
+`secrets` in config is a list of sources. Each yields variables that go into every box.
+
+- `env`: named local variables. `{ "type": "env", "names": ["A", "B"] }`
+- `file`: a local dotenv or JSON file. `{ "type": "file", "path": "~/.secrets.env", "format": "dotenv" }`
+- `command`: runs a program and parses stdout. `{ "type": "command", "argv": ["..."], "format": "json" }`
+- `doppler`: `{ "type": "doppler", "project", "config" }`, or `--doppler project/config`. A preset over `command`.
+
+`format` is `json` (a flat object of string values) or `dotenv`. `command` takes `argv` as a list and runs it without a shell; write `["sh", "-c", "..."]` if you need one. It inherits your environment, so your credential CLI keeps its login. `timeoutMs` defaults to `30000`; the process is killed past it. Errors show the program, exit code and stderr, never its output.
+
+Any command that prints JSON or dotenv works. Examples:
+
+- 1Password: `["op", "inject", "-i", "template.env"]` as `dotenv`
+- Vault: `["vault", "kv", "get", "-format=json", "-field=data", "secret/app"]` as `json`
+- AWS Secrets Manager: `["aws", "secretsmanager", "get-secret-value", "--secret-id", "X", "--query", "SecretString", "--output", "text"]` as `json`
+
+A single value, such as a provider API key or a git host token, uses a value reference:
+
+- `{ "from": "env", "name": "E2B_API_KEY" }`
+- `{ "from": "file", "path": "~/.e2b-key" }`
+- `{ "from": "command", "argv": ["op", "read", "op://vault/item/field"] }`
+- `{ "from": "command", "argv": ["security", "find-generic-password", "-s", "NAME", "-w"] }` (macOS Keychain)
+- `{ "from": "doppler", "project": "p", "config": "dev", "name": "E2B_API_KEY" }`
+
+A command reference trims one trailing newline and fails on empty output. Tools such as `pass show NAME` and `bw get password NAME` print a single value and fit the same form.
 
 ## Config
 
@@ -63,7 +88,7 @@ Secret sources are `doppler` (`--doppler project/config` or `secrets` in config)
 | --- | --- | --- |
 | `provider` | `"e2b"` | Sandbox provider (`e2b`) |
 | `image` | provider default | Base image override |
-| `secrets` | `[]` | Sources pushed into every box: `{ "type": "doppler", "project", "config" }` or `{ "type": "env", "names": [...] }` |
+| `secrets` | `[]` | Sources pushed into every box. See Secret sources |
 | `gitHost` | `{ "type": "github" }` | See Git hosts |
 | `idle.minutes` | `15` | Idle time before a box expires |
 | `idle.action` | `"kill"` | `kill` discards the box; `pause` keeps disk and memory |
@@ -79,11 +104,11 @@ Secret sources are `doppler` (`--doppler project/config` or `secrets` in config)
 
 ### e2b
 
-Set `E2B_API_KEY`, or point `e2b.apiKey` at Doppler. Image settings apply on the next `l2b image build`.
+Set `E2B_API_KEY`, or point `e2b.apiKey` at a value reference. Image settings apply on the next `l2b image build`.
 
 | Key | Default | Meaning |
 | --- | --- | --- |
-| `e2b.apiKey` | env `E2B_API_KEY` | Value reference: `env` or `doppler` |
+| `e2b.apiKey` | env `E2B_API_KEY` | Value reference: `env`, `file`, `command` or `doppler` |
 | `e2b.cpuCount`, `e2b.memoryMB` | `4`, `8192` | Box size at image build |
 | `e2b.features` | all | Image tooling: `node`, `gh`, `doppler`, `docker`, `postgres`, `redis`, `ripgrep`, `tmux`. `[]` for a lean image |
 | `e2b.nodeMajor` | `24` | Node version for the `node` feature |
