@@ -46,9 +46,11 @@ Detached jobs suit long commands such as full test suites, which would otherwise
 
 ## How it works
 
+Each provider runs this workflow with its own primitives. The description below is the shared toolkit's snapshot-and-mirror workflow, which e2b uses.
+
 An **image** holds tooling only: git, gh, a language runtime and whatever else you configure. `l2b image build` makes it once. A **snapshot** is a per-repo disk capture on top of that image, made by `l2b bake`: a shallow mirror, a checkout, installed dependencies, and any codegen from `warm`. A **box** is a sandbox started from the snapshot. `up` pushes credentials, switches the checkout to your branch, and runs `install` incrementally.
 
-Boxes expire 15 minutes after the last l2b activity, and a heartbeat holds that off while a command runs. Push a branch to keep work.
+Boxes expire 15 minutes after the last l2b activity, with no local process needed; each provider documents how it guarantees that. Push a branch to keep work.
 
 ## Credentials
 
@@ -96,7 +98,7 @@ A command reference trims one trailing newline and fails on empty output. Tools 
 | `gitHost` | `{ "type": "github" }` | See Git hosts |
 | `gitIdentity` | local `git config --global` | `{ "name": "...", "email": "..." }` set as the global git author in every box by `up` and `run`. Skipped when neither this nor the local values are set |
 | `idle.minutes` | `15` | Idle time before a box expires |
-| `idle.action` | `"kill"` | `kill` discards the box; `pause` keeps disk and memory |
+| `idle.action` | `"kill"` | Deprecated alias for the provider's own idle setting, such as `e2b.onIdle` |
 | `clone.strategy` | `"mirror"` | `mirror`: bare mirror plus a worktree checkout. `plain`: an ordinary clone |
 | `clone.depth` | `50` | Commits of history kept; `null` for full history |
 | `clone.filter` | `"blob:limit=50m"` | Git partial-clone filter, e.g. `blob:none`; `null` for none |
@@ -139,9 +141,12 @@ Each provider has its own config block with its own API key, such as `e2b` below
 
 Set `E2B_API_KEY`, or point `e2b.apiKey` at a value reference. Image settings apply on the next `l2b image build`.
 
+A box expires through e2b's server-side timeout. l2b sets it to the idle window at creation and re-arms it with a heartbeat while a command or shell runs.
+
 | Key | Default | Meaning |
 | --- | --- | --- |
 | `e2b.apiKey` | env `E2B_API_KEY` | Value reference: `env`, `file`, `command` or `doppler` |
+| `e2b.onIdle` | `idle.action` | At the end of the idle window: `kill` discards the box; `pause` keeps disk and memory (and secrets) |
 | `e2b.cpuCount`, `e2b.memoryMB` | `4`, `8192` | Box size at image build |
 | `e2b.features` | all | Image tooling: `node`, `gh`, `doppler`, `docker`, `postgres`, `redis`, `ripgrep`, `tmux`. `[]` for a lean image |
 | `e2b.nodeMajor` | `24` | Node version for the `node` feature |
@@ -172,12 +177,20 @@ l2b records bake times in `$XDG_STATE_HOME/l2b/bakes.json`. A snapshot baked els
 
 ## Adding a provider
 
-Implement `Provider` and `Box` from `src/providers/types.ts`, register it in `src/providers/index.ts`, and add its config block to `src/config.ts`. The e2b provider in `src/providers/e2b/` is the reference.
+A provider gets the workflow done with its own primitives. Core says what it wants: a box for this repo and branch, a bake, a command run. Core then checks the result.
+
+1. Implement `Provider` and `Box` from `src/providers/types.ts`. The doc comments there state the functionality expectations: what `start` delivers, how credentials must be handled, and that boxes expire on their own.
+2. Throw `UnsupportedError` for anything the provider cannot do. l2b prints its message as it comes.
+3. Keep provider policy in the adapter and its own config block: what pause keeps, ssh or pty, snapshots, image builds, lifetime caps.
+4. Reuse `src/toolkit/` if it fits. It has git scripts, install detection, the credential env file, the file write behind `put`, the heartbeat, local bake records, the base recipe and `machineWorkflow`, which turns low-level machine primitives into a `Provider`. Nothing requires it.
+5. Pass the contract suite. Add a test that calls `describeProviderContract({ name, makeProvider, timeoutMs })` from `src/providers/contract.ts`. It covers the branch checkout with dependencies installed, exec exit codes and streams, background processes outliving exec, `put`, the git identity, credentials reaching commands and never being persisted, bakes, run-once cleanup, idle expiry and `UnsupportedError`. Gate a real-provider run behind an environment variable, as `src/providers/e2b/contract.test.ts` does with `L2B_CONTRACT_E2B=1`.
+6. Register the provider in `src/providers/index.ts` and `src/providers/ids.ts`, add its config block to `src/config.ts`, and give it a README section.
 
 ## Development
 
     bun run typecheck
     bun test
+    L2B_CONTRACT_E2B=1 bun test src/providers/e2b   # contract suite against real e2b boxes
 
 ## License
 
