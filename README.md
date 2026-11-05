@@ -92,7 +92,7 @@ A command reference trims one trailing newline and fails on empty output. Tools 
 
 | Key | Default | Meaning |
 | --- | --- | --- |
-| `provider` | `"e2b"` | Default sandbox provider (`e2b`). See Providers |
+| `provider` | `"e2b"` | Default sandbox provider (`e2b` or `boat`). See Providers |
 | `image` | provider default | Base image override |
 | `secrets` | `[]` | Sources pushed into every box. See Secret sources |
 | `gitHost` | `{ "type": "github" }` | See Git hosts |
@@ -153,6 +153,26 @@ A box expires through e2b's server-side timeout. l2b sets it to the idle window 
 | `e2b.npmGlobals`, `e2b.aptPackages` | `[]` | Extra packages in the image |
 | `e2b.imageCommands` | `[]` | Shell commands run as the box user at image build, for toolchains |
 
+### boat
+
+Set `BOAT_API_KEY`, or point `boat.apiKey` at a value reference. `ssh` and `ssh-keygen` must be on your PATH.
+
+Boxes run boat's stock Ubuntu image, which has git, gh, node, bun and docker. A bake is a stopped boat box: `l2b bake` clones and installs in a box, then stops it, and boat keeps its disk. Boxes started from the bake are forks of it. boat keeps a stopped box's disk for at least 14 days and may delete it after that; once it is gone, `up` and `run` clone from scratch until the next bake. A new bake replaces the old one. `l2b image build` makes a `l2b-base` bake with the packages and commands in the `boat` block, and boxes and bakes start from it; with neither set it builds nothing.
+
+A box expires through boat's auto-stop deadline. l2b sets it to the idle window at creation and re-arms it while a command or shell runs. Boxes are created with snapshots off, so the stop at the deadline erases the box and its disk. A forked box may keep its disk when it stops; l2b deletes stopped boxes on the next `up` or `run`.
+
+Credentials go to the box over SSH stdin into `/dev/shm/l2b.env`. l2b authorizes a new key for each write, pins the host key boat reports, then revokes the key and deletes it locally. Secrets are never part of an API request, a command line or boat's file API. Boxes are created with monitoring off, so boat keeps no command history or output. boat writes the output of each command to `~/.ascii/processes/` on the box disk; a command that prints a secret leaves it there until the box is gone. Bake writes a `.boatignore` that keeps that folder out of the kept disk.
+
+`shell` runs `ssh -t`. `url` returns a token-gated URL; anyone with the full URL can open the port. `pause` is not supported.
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `boat.apiKey` | env `BOAT_API_KEY` | Value reference: `env`, `file`, `command` or `doppler` |
+| `boat.type` | `"default"` | Box size: `small`, `default`, `large`, `xlarge` |
+| `boat.environment` | `null` | A boat environment to attach to every box. `null` attaches none, so boxes get no account secrets, repos or logins |
+| `boat.aptPackages` | `[]` | Apt packages `l2b image build` adds to the stock image |
+| `boat.imageCommands` | `[]` | Shell commands run as the box user at image build (sudo is available) |
+
 ## Git hosts
 
 Every git host is a base URL, a credential username, a token and the variable the token is exported as. `github` and `gitlab` are presets of that shape:
@@ -191,6 +211,7 @@ A provider gets the workflow done with its own primitives. Core says what it wan
     bun run typecheck
     bun test
     L2B_CONTRACT_E2B=1 bun test src/providers/e2b   # contract suite against real e2b boxes
+    L2B_CONTRACT_BOAT=1 bun test src/providers/boat # contract suite against real boat boxes
 
 ## License
 
