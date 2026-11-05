@@ -2,24 +2,26 @@ import { afterEach, expect, test } from 'bun:test';
 import { $ } from 'bun';
 import {
   credentialHelperCommand,
-  credentialUsername,
   gitHostSchema,
   hostFor,
   remoteUrl,
+  resolveGitHost,
   resolveHostToken,
-  tokenEnvVar,
-  type GitHost,
 } from './git-host';
 import { configSchema } from './config';
+import type { ValueRef } from './secrets';
 
-const github: GitHost = { type: 'github' };
-const gitlab: GitHost = { type: 'gitlab', baseUrl: 'https://gitlab.example.com' };
-const generic: GitHost = {
+const githubConfig = gitHostSchema.parse({ type: 'github' });
+const gitlabConfig = gitHostSchema.parse({ type: 'gitlab', baseUrl: 'https://gitlab.example.com' });
+const genericConfig = gitHostSchema.parse({
   type: 'generic',
   baseUrl: 'https://git.example.com/scm',
   username: 'bot',
   token: { from: 'env', name: 'L2B_TEST_GENERIC_TOKEN' },
-};
+});
+const github = resolveGitHost(githubConfig);
+const gitlab = resolveGitHost(gitlabConfig);
+const generic = resolveGitHost(genericConfig);
 
 afterEach(() => {
   delete process.env.GH_TOKEN;
@@ -37,24 +39,35 @@ test('remote URLs per host', () => {
     'https://git.example.com/scm/o/r.git'
   );
   expect(
-    remoteUrl({ host: { ...gitlab, baseUrl: 'https://gl.test/' }, repo: 'o/r' })
+    remoteUrl({ host: resolveGitHost({ ...gitlabConfig, baseUrl: 'https://gl.test/' }), repo: 'o/r' })
   ).toBe('https://gl.test/o/r.git');
 });
 
-test('gitlab defaults to gitlab.com', () => {
+test('presets default their base URL; generic defaults its token variable', () => {
   expect(gitHostSchema.parse({ type: 'gitlab' })).toEqual({
     type: 'gitlab',
     baseUrl: 'https://gitlab.com',
   });
+  expect(gitHostSchema.parse({ type: 'github' })).toEqual({
+    type: 'github',
+    baseUrl: 'https://github.com',
+  });
+  expect(genericConfig).toMatchObject({ tokenEnvVar: 'L2B_GIT_TOKEN' });
+});
+
+test('generic rejects a token variable name that is not a shell identifier', () => {
+  expect(() =>
+    gitHostSchema.parse({ ...genericConfig, tokenEnvVar: 'X; rm -rf /' })
+  ).toThrow();
 });
 
 test('credential username and token env var per host', () => {
-  expect(credentialUsername(github)).toBe('x-access-token');
-  expect(credentialUsername(gitlab)).toBe('oauth2');
-  expect(credentialUsername(generic)).toBe('bot');
-  expect(tokenEnvVar(github)).toBe('GH_TOKEN');
-  expect(tokenEnvVar(gitlab)).toBe('GITLAB_TOKEN');
-  expect(tokenEnvVar(generic)).toBe('L2B_GIT_TOKEN');
+  expect(github.username).toBe('x-access-token');
+  expect(gitlab.username).toBe('oauth2');
+  expect(generic.username).toBe('bot');
+  expect(github.tokenEnvVar).toBe('GH_TOKEN');
+  expect(gitlab.tokenEnvVar).toBe('GITLAB_TOKEN');
+  expect(generic.tokenEnvVar).toBe('L2B_GIT_TOKEN');
 });
 
 test('github credential helper is scoped to github.com with the original helper body', () => {
@@ -105,7 +118,87 @@ test('a per-repo host overrides the global one; the default is github', () => {
     repos: { 'o/r': { gitHost: { type: 'github' } }, 'o/s': {} },
   });
   expect(hostFor({ config, repo: 'o/r' })).toEqual(github);
-  expect(hostFor({ config, repo: 'o/s' }).type).toBe('gitlab');
-  expect(hostFor({ config, repo: null }).type).toBe('gitlab');
+  expect(hostFor({ config, repo: 'o/s' }).tokenEnvVar).toBe('GITLAB_TOKEN');
+  expect(hostFor({ config, repo: null }).tokenEnvVar).toBe('GITLAB_TOKEN');
   expect(hostFor({ config: configSchema.parse({}), repo: 'x/y' })).toEqual(github);
+});
+
+const ghes = resolveGitHost(
+  gitHostSchema.parse({ type: 'github', baseUrl: 'https://ghe.example.com/' })
+);
+
+test('GitHub Enterprise Server uses its base URL for the remote and the helper origin', () => {
+  expect(remoteUrl({ host: ghes, repo: 'o/r' })).toBe('https://ghe.example.com/o/r.git');
+  expect(credentialHelperCommand(ghes)).toBe(
+    `git config --global 'credential.https://ghe.example.com.helper' '!f() { echo username=x-access-token; echo password=$GH_TOKEN; }; f'`
+  );
+});
+
+test('the CLI fallback names the host only when it is not the default', () => {
+  expect(github.token).toEqual({
+    from: 'firstOf',
+    refs: [
+      { from: 'env', name: 'GH_TOKEN' },
+      { from: 'env', name: 'GITHUB_TOKEN' },
+      { from: 'command', argv: ['gh', 'auth', 'token'], timeoutMs: 30_000 },
+    ],
+  });
+  expect(ghes.token).toMatchObject({
+    refs: [
+      { name: 'GH_TOKEN' },
+      { name: 'GITHUB_TOKEN' },
+      { argv: ['gh', 'auth', 'token', '--hostname', 'ghe.example.com'] },
+    ],
+  });
+  expect(gitlab.token).toMatchObject({
+    refs: [
+      { name: 'GITLAB_TOKEN' },
+      { argv: ['glab', 'auth', 'token', '--hostname', 'gitlab.example.com'] },
+    ],
+  });
+  expect(resolveGitHost(gitHostSchema.parse({ type: 'gitlab' })).token).toMatchObject({
+    refs: [{}, { argv: ['glab', 'auth', 'token'] }],
+  });
+});
+
+test('generic tokenEnvVar is exported name and helper variable', () => {
+  const host = resolveGitHost(gitHostSchema.parse({ ...genericConfig, tokenEnvVar: 'BB_TOKEN' }));
+  expect(host.tokenEnvVar).toBe('BB_TOKEN');
+  expect(credentialHelperCommand(host)).toContain('password=$BB_TOKEN;');
+});
+
+test('presets are fully described by the resolved shape', () => {
+  const rows = [
+    { host: githubConfig, baseUrl: 'https://github.com', username: 'x-access-token', tokenEnvVar: 'GH_TOKEN' },
+    { host: gitlabConfig, baseUrl: 'https://gitlab.example.com', username: 'oauth2', tokenEnvVar: 'GITLAB_TOKEN' },
+    { host: genericConfig, baseUrl: 'https://git.example.com/scm', username: 'bot', tokenEnvVar: 'L2B_GIT_TOKEN' },
+  ];
+  for (const row of rows) {
+    const resolved = resolveGitHost(row.host);
+    expect(resolved).toMatchObject({
+      baseUrl: row.baseUrl,
+      username: row.username,
+      tokenEnvVar: row.tokenEnvVar,
+    });
+    expect(remoteUrl({ host: resolved, repo: 'o/r' })).toBe(`${row.baseUrl}/o/r.git`);
+  }
+});
+
+test('a failed token chain gives the preset hint and no values', async () => {
+  const failing: ValueRef = {
+    from: 'firstOf',
+    refs: [
+      { from: 'env', name: 'L2B_TEST_UNSET' },
+      { from: 'command', argv: ['l2b-test-no-such-binary'], timeoutMs: 5000 },
+    ],
+  };
+  await expect(resolveHostToken({ ...github, token: failing })).rejects.toThrow(
+    'no GitHub token: set GH_TOKEN or run `gh auth login`'
+  );
+  await expect(resolveHostToken({ ...gitlab, token: failing })).rejects.toThrow(
+    'no GitLab token: set GITLAB_TOKEN or run `glab auth login`'
+  );
+  await expect(resolveHostToken({ ...generic, token: failing })).rejects.toThrow(
+    'L2B_TEST_UNSET'
+  );
 });

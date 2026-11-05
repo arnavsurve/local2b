@@ -208,3 +208,61 @@ test('doppler preset builds the documented argv', () => {
     '--project', 'p', '--config', 'c',
   ]);
 });
+
+test('firstOf returns the first ref that resolves, in order', async () => {
+  process.env.L2B_TEST_FIRST = '';
+  process.env.L2B_TEST_SECOND = 'two';
+  process.env.L2B_TEST_THIRD = 'three';
+  try {
+    const ref = valueRefSchema.parse({
+      from: 'firstOf',
+      refs: [
+        { from: 'env', name: 'L2B_TEST_MISSING' },
+        { from: 'env', name: 'L2B_TEST_FIRST' },
+        { from: 'env', name: 'L2B_TEST_SECOND' },
+        { from: 'env', name: 'L2B_TEST_THIRD' },
+      ],
+    });
+    expect(await resolveValue(ref)).toBe('two');
+  } finally {
+    delete process.env.L2B_TEST_FIRST;
+    delete process.env.L2B_TEST_SECOND;
+    delete process.env.L2B_TEST_THIRD;
+  }
+});
+
+test('firstOf falls through failing commands and nests', async () => {
+  const ref = valueRefSchema.parse({
+    from: 'firstOf',
+    refs: [
+      { from: 'command', argv: ['false'] },
+      { from: 'firstOf', refs: [{ from: 'command', argv: ['printf', 'tok\n'] }] },
+    ],
+  });
+  expect(await resolveValue(ref)).toBe('tok');
+});
+
+test('firstOf with nothing resolving lists what was tried and never a value', async () => {
+  process.env.L2B_TEST_EMPTY = '';
+  try {
+    const error = await resolveValue({
+      from: 'firstOf',
+      refs: [
+        { from: 'env', name: 'L2B_TEST_EMPTY' },
+        { from: 'command', argv: ['sh', '-c', 'echo leaked-stdout; echo oops >&2; exit 3'], timeoutMs: 5000 },
+      ],
+    }).then(
+      () => null,
+      (e: unknown) => (e instanceof Error ? e.message : String(e))
+    );
+    expect(error).toContain('L2B_TEST_EMPTY');
+    expect(error).toContain('sh');
+    expect(error).not.toContain('leaked-stdout');
+  } finally {
+    delete process.env.L2B_TEST_EMPTY;
+  }
+});
+
+test('firstOf needs at least one ref', () => {
+  expect(() => valueRefSchema.parse({ from: 'firstOf', refs: [] })).toThrow();
+});

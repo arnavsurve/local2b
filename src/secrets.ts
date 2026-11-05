@@ -12,7 +12,7 @@ const timeoutSchema = z.number().int().positive().default(DEFAULT_TIMEOUT_MS);
 const formatSchema = z.enum(['json', 'dotenv']);
 type Format = z.infer<typeof formatSchema>;
 
-export const valueRefSchema = z.discriminatedUnion('from', [
+const leafValueRefSchema = z.discriminatedUnion('from', [
   z.object({ from: z.literal('env'), name: z.string() }),
   z.object({
     from: z.literal('doppler'),
@@ -23,7 +23,21 @@ export const valueRefSchema = z.discriminatedUnion('from', [
   z.object({ from: z.literal('command'), argv: argvSchema, timeoutMs: timeoutSchema }),
   z.object({ from: z.literal('file'), path: z.string() }),
 ]);
-export type ValueRef = z.infer<typeof valueRefSchema>;
+
+/** A single value and where to read it from. `firstOf` tries each ref in order. */
+export type ValueRef =
+  | z.infer<typeof leafValueRefSchema>
+  | { from: 'firstOf'; refs: ValueRef[] };
+type ValueRefInput =
+  | z.input<typeof leafValueRefSchema>
+  | { from: 'firstOf'; refs: ValueRefInput[] };
+
+export const valueRefSchema: z.ZodType<ValueRef, ValueRefInput> = z.lazy(() =>
+  z.union([
+    leafValueRefSchema,
+    z.object({ from: z.literal('firstOf'), refs: z.array(valueRefSchema).min(1) }),
+  ])
+);
 
 /** A bundle of variables injected into every sandbox. */
 export const secretSourceSchema = z.discriminatedUnion('type', [
@@ -201,7 +215,20 @@ export async function loadSecrets(source: SecretSource) {
   }
 }
 
-export async function resolveValue(ref: ValueRef) {
+/** Tries each ref in order; the error lists every failure, which never carries values. */
+async function resolveFirstOf(refs: ValueRef[]) {
+  const failures: string[] = [];
+  for (const ref of refs) {
+    try {
+      return await resolveValue(ref);
+    } catch (error) {
+      failures.push(error instanceof Error ? error.message : 'unknown error');
+    }
+  }
+  throw new Error(`no value from any of ${refs.length} sources: ${failures.join('; ')}`);
+}
+
+export async function resolveValue(ref: ValueRef): Promise<string> {
   switch (ref.from) {
     case 'env': {
       const value = process.env[ref.name];
@@ -224,6 +251,8 @@ export async function resolveValue(ref: ValueRef) {
       if (!value) throw new Error(`secrets file ${ref.path} is empty`);
       return value;
     }
+    case 'firstOf':
+      return resolveFirstOf(ref.refs);
     default: {
       const unreachable: never = ref;
       throw new Error(`unknown value ref: ${JSON.stringify(unreachable)}`);

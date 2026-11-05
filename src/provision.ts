@@ -4,7 +4,7 @@ import {
   shallowCloneCommand,
   switchScript,
 } from './git-scripts';
-import { hostFor, remoteUrl, type GitHost } from './git-host';
+import { hostFor, remoteUrl, type ResolvedGitHost } from './git-host';
 import { step } from './progress';
 import type { Box } from './providers/types';
 import { checkoutDir, mirrorDir } from './repo';
@@ -57,7 +57,7 @@ async function checkoutFromClone({
 }: {
   box: Box;
   repo: string;
-  host: GitHost;
+  host: ResolvedGitHost;
   branch: string | null;
   full: boolean;
 }) {
