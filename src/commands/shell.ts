@@ -1,6 +1,7 @@
 import { parseArgs } from 'node:util';
 import { requirePositional } from '../args';
 import type { Command } from '../context';
+import { COMMAND_HELP } from '../help';
 import { connectBox } from '../find-box';
 import { withEnv } from '../session';
 
@@ -14,7 +15,7 @@ export const shell: Command = async ({ ctx, args }) => {
   const name = requirePositional({
     positionals,
     index: 0,
-    usage: 'l2b shell <name> [--cwd dir]',
+    usage: COMMAND_HELP.shell.usage,
   });
   if (!process.stdin.isTTY || !process.stdout.isTTY) {
     throw new Error('l2b shell needs an interactive terminal; use `l2b exec` from scripts and agents');

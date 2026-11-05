@@ -5,6 +5,7 @@ import { hostFor, remoteUrl } from '../git-host';
 import { parseDuration } from '../duration';
 import { bakeScript } from '../git-scripts';
 import { checkoutDir, mirrorDir, repoName, snapshotName } from '../repo';
+import { COMMAND_HELP } from '../help';
 import { selectForRepo, type Command } from '../context';
 import { describeInstall, resolveInstall } from '../install';
 import { step } from '../progress';
@@ -34,7 +35,7 @@ export const bake: Command = async ({ ctx: base, args }) => {
   const repo = requirePositional({
     positionals,
     index: 0,
-    usage: 'l2b bake <owner/repo>',
+    usage: COMMAND_HELP.bake.usage,
   });
   const ctx = selectForRepo({ ctx: base, repo });
   const host = hostFor({ config: ctx.config, repo });
