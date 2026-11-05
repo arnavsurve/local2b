@@ -1,35 +1,104 @@
-import { $ } from 'bun';
 import { z } from 'zod';
 import type { Config } from './config';
-import { resolveValue, valueRefSchema } from './secrets';
+import { resolveValue, valueRefSchema, type ValueRef } from './secrets';
 import { shellQuote } from './shell';
 
-/** Where a repo's git remote lives and how to authenticate to it. */
+const DEFAULT_TOKEN_TIMEOUT_MS = 30_000;
+const GITHUB_BASE_URL = 'https://github.com';
+const GITLAB_BASE_URL = 'https://gitlab.com';
+
+const envNameSchema = z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/, 'must be a shell variable name');
+
+/**
+ * Where a repo's git remote lives and how to authenticate to it.
+ * `github` and `gitlab` are presets of the `generic` shape; see `resolveGitHost`.
+ */
 export const gitHostSchema = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('github') }),
-  z.object({
-    type: z.literal('gitlab'),
-    baseUrl: z.string().default('https://gitlab.com'),
-  }),
+  /** `baseUrl` points at a GitHub Enterprise Server instance. */
+  z.object({ type: z.literal('github'), baseUrl: z.string().default(GITHUB_BASE_URL) }),
+  z.object({ type: z.literal('gitlab'), baseUrl: z.string().default(GITLAB_BASE_URL) }),
   /** Any other https git host (Bitbucket, Gitea, self-hosted): a fixed username plus a token. */
   z.object({
     type: z.literal('generic'),
     baseUrl: z.string(),
     username: z.string(),
     token: valueRefSchema,
+    /** The variable the token is exported as inside the sandbox. */
+    tokenEnvVar: envNameSchema.default('L2B_GIT_TOKEN'),
   }),
 ]);
 export type GitHost = z.infer<typeof gitHostSchema>;
 
-export const GITHUB_BASE_URL = 'https://github.com';
+/** Everything needed to clone from and authenticate to a host. */
+export type ResolvedGitHost = {
+  baseUrl: string;
+  username: string;
+  token: ValueRef;
+  /** The variable the token is exported as inside the sandbox. */
+  tokenEnvVar: string;
+  /** Replaces the token chain's own error when it fails. */
+  tokenHint: string | null;
+};
 
-function baseUrlOf(host: GitHost) {
+function trimSlashes(url: string) {
+  return url.replace(/\/+$/, '');
+}
+
+/** The CLI's `auth token`, scoped to the host unless it is the preset's default one. */
+function authTokenArgv({ cli, baseUrl, defaultUrl }: { cli: string; baseUrl: string; defaultUrl: string }) {
+  const argv = [cli, 'auth', 'token'];
+  if (baseUrl === defaultUrl) return argv;
+  return [...argv, '--hostname', new URL(baseUrl).host];
+}
+
+function cliCommand(argv: string[]): ValueRef {
+  return { from: 'command', argv, timeoutMs: DEFAULT_TOKEN_TIMEOUT_MS };
+}
+
+/** The only place that knows what a host type means. */
+export function resolveGitHost(host: GitHost): ResolvedGitHost {
   switch (host.type) {
-    case 'github':
-      return GITHUB_BASE_URL;
-    case 'gitlab':
+    case 'github': {
+      const baseUrl = trimSlashes(host.baseUrl);
+      return {
+        baseUrl,
+        username: 'x-access-token',
+        token: {
+          from: 'firstOf',
+          refs: [
+            { from: 'env', name: 'GH_TOKEN' },
+            { from: 'env', name: 'GITHUB_TOKEN' },
+            cliCommand(authTokenArgv({ cli: 'gh', baseUrl, defaultUrl: GITHUB_BASE_URL })),
+          ],
+        },
+        tokenEnvVar: 'GH_TOKEN',
+        tokenHint: 'no GitHub token: set GH_TOKEN or run `gh auth login`',
+      };
+    }
+    case 'gitlab': {
+      const baseUrl = trimSlashes(host.baseUrl);
+      return {
+        baseUrl,
+        username: 'oauth2',
+        token: {
+          from: 'firstOf',
+          refs: [
+            { from: 'env', name: 'GITLAB_TOKEN' },
+            cliCommand(authTokenArgv({ cli: 'glab', baseUrl, defaultUrl: GITLAB_BASE_URL })),
+          ],
+        },
+        tokenEnvVar: 'GITLAB_TOKEN',
+        tokenHint: 'no GitLab token: set GITLAB_TOKEN or run `glab auth login`',
+      };
+    }
     case 'generic':
-      return host.baseUrl.replace(/\/+$/, '');
+      return {
+        baseUrl: trimSlashes(host.baseUrl),
+        username: host.username,
+        token: host.token,
+        tokenEnvVar: host.tokenEnvVar,
+        tokenHint: null,
+      };
     default: {
       const unreachable: never = host;
       throw new Error(`unknown git host: ${JSON.stringify(unreachable)}`);
@@ -37,78 +106,23 @@ function baseUrlOf(host: GitHost) {
   }
 }
 
-export function remoteUrl({ host, repo }: { host: GitHost; repo: string }) {
-  return `${baseUrlOf(host)}/${repo}.git`;
-}
-
-export function credentialUsername(host: GitHost) {
-  switch (host.type) {
-    case 'github':
-      return 'x-access-token';
-    case 'gitlab':
-      return 'oauth2';
-    case 'generic':
-      return host.username;
-    default: {
-      const unreachable: never = host;
-      throw new Error(`unknown git host: ${JSON.stringify(unreachable)}`);
-    }
-  }
-}
-
-/** The variable the token is exported as inside the sandbox. */
-export function tokenEnvVar(host: GitHost) {
-  switch (host.type) {
-    case 'github':
-      return 'GH_TOKEN';
-    case 'gitlab':
-      return 'GITLAB_TOKEN';
-    case 'generic':
-      return 'L2B_GIT_TOKEN';
-    default: {
-      const unreachable: never = host;
-      throw new Error(`unknown git host: ${JSON.stringify(unreachable)}`);
-    }
-  }
+export function remoteUrl({ host, repo }: { host: ResolvedGitHost; repo: string }) {
+  return `${host.baseUrl}/${repo}.git`;
 }
 
 /** Scoped to the host's origin so the token is never offered to other remotes. */
-export function credentialHelperCommand(host: GitHost) {
-  const origin = new URL(baseUrlOf(host)).origin;
-  const helper = `!f() { echo username=${credentialUsername(host)}; echo password=$${tokenEnvVar(host)}; }; f`;
+export function credentialHelperCommand(host: ResolvedGitHost) {
+  const origin = new URL(host.baseUrl).origin;
+  const helper = `!f() { echo username=${host.username}; echo password=$${host.tokenEnvVar}; }; f`;
   return `git config --global ${shellQuote(`credential.${origin}.helper`)} ${shellQuote(helper)}`;
 }
 
-async function cliToken({ cmd, hint }: { cmd: string[]; hint: string }) {
-  const out = await $`${cmd}`.nothrow().quiet();
-  if (out.exitCode !== 0) throw new Error(hint);
-  return out.text().trim();
-}
-
-export async function resolveHostToken(host: GitHost) {
-  switch (host.type) {
-    case 'github': {
-      const fromEnv = process.env.GH_TOKEN ?? process.env.GITHUB_TOKEN;
-      if (fromEnv) return fromEnv;
-      return cliToken({
-        cmd: ['gh', 'auth', 'token'],
-        hint: 'no GitHub token: set GH_TOKEN or run `gh auth login`',
-      });
-    }
-    case 'gitlab': {
-      const fromEnv = process.env.GITLAB_TOKEN;
-      if (fromEnv) return fromEnv;
-      return cliToken({
-        cmd: ['glab', 'auth', 'token'],
-        hint: 'no GitLab token: set GITLAB_TOKEN or run `glab auth login`',
-      });
-    }
-    case 'generic':
-      return resolveValue(host.token);
-    default: {
-      const unreachable: never = host;
-      throw new Error(`unknown git host: ${JSON.stringify(unreachable)}`);
-    }
+export async function resolveHostToken(host: ResolvedGitHost) {
+  try {
+    return await resolveValue(host.token);
+  } catch (error) {
+    if (host.tokenHint) throw new Error(host.tokenHint);
+    throw error;
   }
 }
 
@@ -121,5 +135,5 @@ export function hostFor({
   repo: string | null;
 }) {
   const override = repo ? config.repos[repo]?.gitHost : null;
-  return override ?? config.gitHost;
+  return resolveGitHost(override ?? config.gitHost);
 }

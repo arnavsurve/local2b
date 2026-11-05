@@ -1,4 +1,4 @@
-import { credentialHelperCommand, resolveHostToken, tokenEnvVar, type GitHost } from './git-host';
+import { credentialHelperCommand, resolveHostToken, type ResolvedGitHost } from './git-host';
 import type { Box } from './providers/types';
 import {
   loadSecrets,
@@ -36,11 +36,11 @@ export async function pushCreds({
 }: {
   box: Box;
   sources: SecretSource[];
-  host: GitHost;
+  host: ResolvedGitHost;
 }) {
   const vars: Record<string, string> = {};
   for (const source of sources) Object.assign(vars, await loadSecrets(source));
-  vars[tokenEnvVar(host)] = await resolveHostToken(host);
+  vars[host.tokenEnvVar] = await resolveHostToken(host);
   await box.writeFile({ path: ENV_FILE, content: toEnvFile(vars) });
   await box.exec({
     cmd: `chmod 600 ${ENV_FILE}`,
@@ -63,7 +63,7 @@ export async function pushEnv({
   await box.writeFile({ path: plainEnvFile({ homeDir: box.homeDir }), content: toEnvFile(env) });
 }
 
-export async function configureGit({ box, host }: { box: Box; host: GitHost }) {
+export async function configureGit({ box, host }: { box: Box; host: ResolvedGitHost }) {
   await run({ box, cmd: credentialHelperCommand(host), cwd: '/' });
 }
 

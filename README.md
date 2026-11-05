@@ -77,6 +77,7 @@ A single value, such as a provider API key or a git host token, uses a value ref
 - `{ "from": "command", "argv": ["op", "read", "op://vault/item/field"] }`
 - `{ "from": "command", "argv": ["security", "find-generic-password", "-s", "NAME", "-w"] }` (macOS Keychain)
 - `{ "from": "doppler", "project": "p", "config": "dev", "name": "E2B_API_KEY" }`
+- `{ "from": "firstOf", "refs": [ref, ...] }` (the first ref that resolves to a non-empty value; if none does, the error lists what failed, never values)
 
 A command reference trims one trailing newline and fails on empty output. Tools such as `pass show NAME` and `bw get password NAME` print a single value and fit the same form.
 
@@ -135,7 +136,14 @@ Set `E2B_API_KEY`, or point `e2b.apiKey` at a value reference. Image settings ap
 
 ## Git hosts
 
-GitHub is the default and uses `GH_TOKEN` or `gh auth token`. GitLab (`{ "type": "gitlab", "baseUrl": "https://gitlab.com" }`) uses `GITLAB_TOKEN` or `glab auth token`. Bitbucket, Gitea and other https hosts use `generic`:
+Every git host is a base URL, a credential username, a token and the variable the token is exported as. `github` and `gitlab` are presets of that shape:
+
+| Type | Token | Exported as |
+|---|---|---|
+| `github` | `firstOf` `GH_TOKEN`, `GITHUB_TOKEN`, `gh auth token` | `GH_TOKEN` |
+| `gitlab` | `firstOf` `GITLAB_TOKEN`, `glab auth token` | `GITLAB_TOKEN` |
+
+GitHub is the default. `baseUrl` points a preset at GitHub Enterprise Server or a self-hosted GitLab (`{ "type": "gitlab", "baseUrl": "https://gitlab.example.com" }`); the CLI fallback then becomes `gh auth token --hostname <host>` or `glab auth token --hostname <host>`. Bitbucket, Gitea and other https hosts use `generic`, with an optional `tokenEnvVar` (default `L2B_GIT_TOKEN`):
 
     { "type": "generic", "baseUrl": "https://bitbucket.org", "username": "x-token-auth",
       "token": { "from": "env", "name": "BITBUCKET_TOKEN" } }
