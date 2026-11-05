@@ -1,26 +1,24 @@
-import { configSchema } from '../config';
-import { buildContext, type Context } from '../context';
 import { ProviderAuthError } from '../providers/types';
 import type { Machine, MachineHost } from '../toolkit/machine';
 
 type FakeFailure = 'auth' | 'network' | null;
 
 /**
- * In-memory provider standing in for the remote edge (the one boundary we
- * don't own). Tests assert on which boxes are still alive afterwards.
+ * In-memory machine host standing in for a provider SDK, for testing the
+ * toolkit workflow command by command. Exec is scripted, not run: it returns
+ * `execExitCode` and records each command line. Tests assert on which
+ * machines are still alive afterwards.
  * `failure` makes every provider call fail the way a missing key or an
  * unreachable API would.
  */
-export function fakeProvider({
+export function fakeMachineHost({
   id,
   execExitCode,
-  failExecWhen,
   homeDir,
   failure,
 }: {
   id: string;
   execExitCode: number;
-  failExecWhen: string | null;
   homeDir: string;
   failure: FakeFailure;
 }) {
@@ -43,7 +41,6 @@ export function fakeProvider({
     async exec({ cmd, onOutput }) {
       executed.push(cmd);
       if (cmd === 'ls -A') onOutput({ stream: 'stdout', data: rootFiles.map((f) => `${f}\n`).join('') });
-      if (failExecWhen && cmd.includes(failExecWhen)) throw new Error('exec blew up');
       return execExitCode;
     },
     async shell() {
@@ -93,96 +90,4 @@ export function fakeProvider({
   };
 
   return { provider, alive, executed, files, snapshots, rootFiles };
-}
-
-export function fakeContext({
-  execExitCode,
-  failExecWhen,
-  homeDir,
-}: {
-  execExitCode: number;
-  failExecWhen: string | null;
-  homeDir: string;
-}) {
-  const fake = fakeProvider({ id: 'fake', execExitCode, failExecWhen, homeDir, failure: null });
-  const ctx: Context = {
-    config: configSchema.parse({}),
-    provider: fake.provider,
-    providers: [fake.provider],
-    configured: ['fake'],
-    defaultId: 'fake',
-    flag: null,
-    env: null,
-  };
-  return { ctx, alive: fake.alive, executed: fake.executed, files: fake.files, snapshots: fake.snapshots, rootFiles: fake.rootFiles };
-}
-
-/**
- * A context with several named fake providers. The first is the config
- * default; `configured` lists the ones searched when addressing a box by name.
- */
-export function fakeMultiContext({
-  providers,
-  configured,
-  flag,
-  env,
-  repos,
-}: {
-  providers: { id: string; failure: FakeFailure }[];
-  configured: string[];
-  flag: string | null;
-  env: string | null;
-  repos: Record<string, string>;
-}) {
-  const fakes = providers.map(({ id, failure }) =>
-    fakeProvider({ id, execExitCode: 0, failExecWhen: null, homeDir: '/home/user', failure })
-  );
-  const [first] = fakes;
-  if (!first) throw new Error('fakeMultiContext needs at least one provider');
-  const base = configSchema.parse({});
-  const config = {
-    ...base,
-    repos: Object.fromEntries(
-      Object.entries(repos).map(([repo, provider]) => [
-        repo,
-        { provider, clone: {}, gitHost: null, baseBranch: null, install: null, warm: null, env: {} },
-      ])
-    ),
-  };
-  const ctx = buildContext({
-    config,
-    providers: fakes.map((f) => f.provider),
-    configured,
-    defaultId: first.provider.id,
-    flag,
-    env,
-  });
-  const fake = (id: string) => {
-    const found = fakes.find((f) => f.provider.id === id);
-    if (!found) throw new Error(`no fake provider ${id}`);
-    return found;
-  };
-  return { ctx, fake };
-}
-
-/**
- * A box whose `exec` runs the command in a real local bash, for testing code
- * that builds shell scripts. `homeDir` should be a real temp dir.
- */
-export function withLocalShell({ box }: { box: Machine }): Machine {
-  return {
-    ...box,
-    async exec({ cmd, cwd, onOutput }) {
-      const proc = Bun.spawn(['bash', '-c', cmd], { cwd, stdout: 'pipe', stderr: 'pipe' });
-      const pump = async (stream: 'stdout' | 'stderr', body: ReadableStream<Uint8Array>) => {
-        for await (const chunk of body) onOutput({ stream, data: Buffer.from(chunk).toString() });
-      };
-      const [code] = await Promise.all([
-        proc.exited,
-        pump('stdout', proc.stdout),
-        pump('stderr', proc.stderr),
-      ]);
-      return code;
-    },
-  };
 }

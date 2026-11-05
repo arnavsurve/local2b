@@ -2,7 +2,7 @@ import { parseArgs } from 'node:util';
 import { requirePositional } from '../args';
 import { selectForRepo, type Command } from '../context';
 import { COMMAND_HELP } from '../help';
-import { provisionBox } from '../provision';
+import { startOptsFor, warnIfStale } from '../start';
 
 export const up: Command = async ({ ctx: base, args }) => {
   const { values, positionals } = parseArgs({
@@ -19,18 +19,18 @@ export const up: Command = async ({ ctx: base, args }) => {
   });
   const name = requirePositional({ positionals, index: 0, usage: COMMAND_HELP.up.usage });
   const ctx = selectForRepo({ ctx: base, repo: values.repo ?? null });
-  const box = await provisionBox({
+  const start = await startOptsFor({
     ctx,
-    opts: {
-      name,
-      repo: values.repo ?? null,
-      branch: values.branch ?? null,
-      full: values.full,
-      install: values.install ?? null,
-      doppler: values.doppler ?? null,
-      image: values.image ?? null,
-    },
+    name,
+    repo: values.repo ?? null,
+    branch: values.branch ?? null,
+    source: values.full ? 'fresh' : 'bake',
+    install: values.install ?? null,
+    doppler: values.doppler ?? null,
+    image: values.image ?? null,
   });
+  await warnIfStale({ ctx, start });
+  const box = await ctx.provider.start(start);
   console.log(
     [
       `${name} ready`,

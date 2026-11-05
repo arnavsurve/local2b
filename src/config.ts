@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { DEFAULT_FEATURES, featureSchema } from './toolkit/recipe';
 import { gitHostSchema } from './git-host';
 import { PROVIDER_IDS } from './providers/ids';
+import type { CloneSpec } from './providers/types';
 import { FILTER_PATTERN } from './toolkit/git-scripts';
 import { secretSourceSchema, valueRefSchema } from './secrets';
 
@@ -22,6 +23,8 @@ export const e2bConfigSchema = z
   aptPackages: z.array(z.string()).default([]),
   /** Shell commands run as the box user at image build, after the system packages (sudo is available), e.g. to install a toolchain. */
   imageCommands: z.array(z.string()).default([]),
+  /** What e2b does to a box at the end of its idle window: `kill` discards it; `pause` keeps its disk and memory (and secrets). null: the deprecated top-level `idle.action`. */
+  onIdle: z.enum(['kill', 'pause']).nullable().default(null),
   })
   .refine((e2b) => e2b.npmGlobals.length === 0 || e2b.features.includes('node'), {
     message: 'npmGlobals requires the "node" feature',
@@ -46,7 +49,7 @@ const CLONE_DEFAULTS = { strategy: 'mirror', depth: 50, filter: 'blob:limit=50m'
 
 const idleSchema = z.object({
   minutes: z.number().positive().default(15),
-  /** `kill` discards the box; `pause` keeps its disk and memory (and secrets) around. */
+  /** Deprecated alias for `e2b.onIdle`, kept so existing configs still parse. */
   action: z.enum(['kill', 'pause']).default('kill'),
 });
 
@@ -98,22 +101,19 @@ const rawConfigSchema = z.object({
  * block" (configured) from "defaults only". Blocks are filled in with their
  * defaults here, so consumers always see a complete one.
  */
-export const configSchema = rawConfigSchema.transform((raw) => ({
-  ...raw,
-  e2b: raw.e2b ?? e2bConfigSchema.parse({}),
-  /** Providers with a config block, plus the default one. */
-  configuredProviders: PROVIDER_IDS.filter((id) => id === raw.provider || raw[id] !== undefined),
-}));
+export const configSchema = rawConfigSchema.transform((raw) => {
+  const e2b = raw.e2b ?? e2bConfigSchema.parse({});
+  return {
+    ...raw,
+    e2b: { ...e2b, onIdle: e2b.onIdle ?? raw.idle.action },
+    /** Providers with a config block, plus the default one. */
+    configuredProviders: PROVIDER_IDS.filter((id) => id === raw.provider || raw[id] !== undefined),
+  };
+});
 export type Config = z.infer<typeof configSchema>;
 
-export type CloneOptions = {
-  strategy: 'mirror' | 'plain';
-  depth: number | null;
-  filter: string | null;
-};
-
 /** Effective clone options for a repo: repo block, then global block, then `cloneDepth`, then defaults. */
-export function resolveClone({ config, repo }: { config: Config; repo: string }): CloneOptions {
+export function resolveClone({ config, repo }: { config: Config; repo: string }): CloneSpec {
   const own = config.repos[repo]?.clone ?? {};
   const global = config.clone;
   return {

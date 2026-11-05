@@ -15,7 +15,7 @@ import { url } from './commands/url';
 import { createContext, type Command } from './context';
 import { commandHelp, isCommandName, rootHelp, wantsHelp, type CommandName } from './help';
 import { extractProviderFlag } from './providers/select';
-import { CommandFailedError } from './toolkit/session';
+import { CommandFailedError } from './providers/types';
 
 const commands: Record<CommandName, Command> = {
   run,

@@ -173,6 +173,16 @@ export class ProviderAuthError extends Error {
   }
 }
 
+/** Thrown when a step a provider runs for the user fails; l2b exits with its code. */
+export class CommandFailedError extends Error {
+  constructor(
+    readonly what: string,
+    readonly exitCode: number
+  ) {
+    super(`${what} failed (exit ${exitCode})`);
+  }
+}
+
 /** Thrown for an operation a provider cannot perform. Core prints the message as is. */
 export class UnsupportedError extends Error {
   constructor({

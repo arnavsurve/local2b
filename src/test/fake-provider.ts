@@ -2,6 +2,8 @@ import { chmodSync, cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from
 import { tmpdir } from 'node:os';
 import { dirname, isAbsolute, join } from 'node:path';
 import { $ } from 'bun';
+import { configSchema } from '../config';
+import { buildContext } from '../context';
 import type { ContractSubject } from '../providers/contract';
 import {
   ProviderAuthError,
@@ -313,9 +315,9 @@ export function fakeProvider({ id, clock, failure }: { id: string; clock: FakeCl
   };
 }
 
-/** A local origin repo with a `main` and a `feature/contract` branch. */
-export async function fakeOrigin() {
-  const dir = mkdtempSync(join(tmpdir(), 'l2b-origin-'));
+/** A local origin repo at `dir` with a `main` and a `feature/contract` branch. */
+async function createOrigin({ dir }: { dir: string }) {
+  mkdirSync(dir, { recursive: true });
   const git = (args: string[]) => $`git -c user.name=t -c user.email=t@t ${args}`.cwd(dir).quiet();
   await git(['init', '-q', '-b', 'main']);
   await Bun.write(join(dir, 'a.txt'), 'main\n');
@@ -325,6 +327,11 @@ export async function fakeOrigin() {
   await Bun.write(join(dir, 'a.txt'), 'feature\n');
   await git(['commit', '-qam', 'feature work']);
   await git(['checkout', '-q', 'main']);
+}
+
+export async function fakeOrigin() {
+  const dir = mkdtempSync(join(tmpdir(), 'l2b-origin-'));
+  await createOrigin({ dir });
   return { dir, remoteUrl: `file://${dir}`, cleanup: () => rmSync(dir, { recursive: true, force: true }) };
 }
 
@@ -361,6 +368,54 @@ export async function fakeContractSubject(): Promise<ContractSubject> {
     cleanup: async () => {
       fake.cleanup();
       origin.cleanup();
+    },
+  };
+}
+
+/**
+ * A context with several named fake providers sharing one clock. The first is
+ * the config default; `configured` lists the ones searched when addressing a
+ * box by name. Repos clone from local origins created by `addOrigin`.
+ */
+export function fakeContext({
+  providers,
+  configured,
+  flag,
+  env,
+  config,
+  clock,
+}: {
+  providers: { id: string; failure: FakeFailure }[];
+  configured: string[];
+  flag: string | null;
+  env: string | null;
+  config: Record<string, unknown>;
+  clock: FakeClock;
+}) {
+  const originRoot = mkdtempSync(join(tmpdir(), 'l2b-origins-'));
+  const fakes = providers.map(({ id, failure }) => fakeProvider({ id, clock, failure }));
+  const [first] = fakes;
+  if (!first) throw new Error('fakeContext needs at least one provider');
+  const ctx = buildContext({
+    config: configSchema.parse({ gitHost: { type: 'github', baseUrl: `file://${originRoot}` }, ...config }),
+    providers: fakes.map((f) => f.provider),
+    configured,
+    defaultId: first.provider.id,
+    flag,
+    env,
+  });
+  const fake = (id: string) => {
+    const found = fakes.find((f) => f.provider.id === id);
+    if (!found) throw new Error(`no fake provider ${id}`);
+    return found;
+  };
+  return {
+    ctx,
+    fake,
+    addOrigin: ({ repo }: { repo: string }) => createOrigin({ dir: join(originRoot, `${repo}.git`) }),
+    cleanup: () => {
+      for (const f of fakes) f.cleanup();
+      rmSync(originRoot, { recursive: true, force: true });
     },
   };
 }

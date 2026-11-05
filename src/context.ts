@@ -1,14 +1,14 @@
 import { loadConfig, type Config } from './config';
 import { createProvider, PROVIDER_IDS } from './providers';
 import { resolveProviderId } from './providers/select';
-import type { MachineHost } from './toolkit/machine';
+import type { Provider } from './providers/types';
 
 export type Context = {
   config: Config;
   /** The provider selected for commands that create or bake. */
-  provider: MachineHost;
+  provider: Provider;
   /** Every provider l2b can talk to. */
-  providers: MachineHost[];
+  providers: Provider[];
   /** Ids of the providers searched when a command addresses a box by name. */
   configured: string[];
   /** The provider used when nothing else picks one. */
@@ -23,7 +23,7 @@ function providerFor({
   providers,
   id,
 }: {
-  providers: MachineHost[];
+  providers: Provider[];
   id: string;
 }) {
   const provider = providers.find((p) => p.id === id);

@@ -1,79 +1,100 @@
 import { afterEach, beforeEach, expect, spyOn, test } from 'bun:test';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { bake } from './commands/bake';
 import { ls } from './commands/ls';
 import { run } from './commands/run';
 import { down } from './commands/lifecycle';
 import { url } from './commands/url';
 import { findBoxProvider } from './find-box';
-import { lookupSnapshot } from './toolkit/bake-records';
-import { snapshotName } from './toolkit/layout';
-import { fakeMultiContext } from './test/fake-machine';
+import type { Provider } from './providers/types';
+import { repoSpecFor } from './repo';
+import { fakeClock, fakeContext, type FakeFailure } from './test/fake-provider';
 
-let stateDir = '';
+const cleanups: (() => void)[] = [];
 
 beforeEach(() => {
-  stateDir = mkdtempSync(join(tmpdir(), 'l2b-state-'));
-  process.env.XDG_STATE_HOME = stateDir;
   process.env.GH_TOKEN = 'test-token';
 });
 
 afterEach(() => {
-  delete process.env.XDG_STATE_HOME;
-  rmSync(stateDir, { recursive: true, force: true });
+  for (const cleanup of cleanups.splice(0)) cleanup();
 });
 
-const ok = { failure: null } as const;
-const both = [
-  { id: 'a', ...ok },
-  { id: 'b', ...ok },
+const both: { id: string; failure: FakeFailure }[] = [
+  { id: 'a', failure: null },
+  { id: 'b', failure: null },
 ];
-const context = (over: Partial<Parameters<typeof fakeMultiContext>[0]>) =>
-  fakeMultiContext({ providers: both, configured: ['a', 'b'], flag: null, env: null, repos: {}, ...over });
 
-test('run --provider b provisions and destroys on b only', async () => {
+function context(over: Partial<Omit<Parameters<typeof fakeContext>[0], 'clock'>>) {
+  const made = fakeContext({
+    providers: both,
+    configured: ['a', 'b'],
+    flag: null,
+    env: null,
+    config: {},
+    clock: fakeClock({ start: Date.now() }),
+    ...over,
+  });
+  cleanups.push(made.cleanup);
+  return made;
+}
+
+const silenced = async (task: () => Promise<void>) => {
+  const log = spyOn(console, 'log').mockImplementation(() => {});
+  const err = spyOn(console, 'error').mockImplementation(() => {});
+  try {
+    await task();
+  } finally {
+    log.mockRestore();
+    err.mockRestore();
+  }
+};
+
+test('run --provider b starts and destroys on b only', async () => {
   const { ctx, fake } = context({ flag: 'b' });
-  await run({ ctx, args: ['--', 'true'] });
-  expect(fake('b').executed.length).toBeGreaterThan(0);
-  expect(fake('a').executed).toEqual([]);
-  expect([...fake('a').alive, ...fake('b').alive]).toEqual([]);
-  expect(fake('a').files.size).toBe(0);
-  expect(fake('b').files.size).toBeGreaterThan(0);
+  await silenced(() => run({ ctx, args: ['--', 'true'] }));
+  expect(fake('b').history).toContain("'true'");
+  expect(fake('a').history).toEqual([]);
+  expect([...fake('a').alive(), ...fake('b').alive()]).toEqual([]);
 });
 
 test('run follows L2B_PROVIDER and the repo override when no flag is given', async () => {
   const viaEnv = context({ env: 'b' });
-  await run({ ctx: viaEnv.ctx, args: ['--', 'true'] });
-  expect(viaEnv.fake('a').executed).toEqual([]);
-  expect(viaEnv.fake('b').executed.length).toBeGreaterThan(0);
+  await silenced(() => run({ ctx: viaEnv.ctx, args: ['--', 'true'] }));
+  expect(viaEnv.fake('a').history).toEqual([]);
+  expect(viaEnv.fake('b').history.length).toBeGreaterThan(0);
 
-  const viaRepo = context({ repos: { 'o/r': 'b' } });
-  await run({ ctx: viaRepo.ctx, args: ['--repo', 'o/r', '--', 'true'] });
-  expect(viaRepo.fake('a').executed).toEqual([]);
-  expect(viaRepo.fake('b').executed.length).toBeGreaterThan(0);
+  const viaRepo = context({ config: { repos: { 'o/r': { provider: 'b' } } } });
+  await viaRepo.addOrigin({ repo: 'o/r' });
+  await silenced(() => run({ ctx: viaRepo.ctx, args: ['--repo', 'o/r', '--', 'true'] }));
+  expect(viaRepo.fake('a').history).toEqual([]);
+  expect(viaRepo.fake('b').history.length).toBeGreaterThan(0);
 });
 
 test('run with an unknown provider fails before touching any provider', async () => {
   expect(() => context({ flag: 'nope' })).toThrow('unknown provider "nope" (known: a, b)');
 });
 
-test('a bake on one provider leaves the other provider without a snapshot or bake record', async () => {
-  const { ctx, fake } = context({ flag: 'b' });
-  const log = spyOn(console, 'log').mockImplementation(() => {});
-  await bake({ ctx, args: ['o/r'] });
-  log.mockRestore();
-  expect(fake('b').snapshots.has(snapshotName('o/r'))).toBe(true);
-  expect(fake('a').snapshots.size).toBe(0);
-  expect(await lookupSnapshot({ provider: fake('a').provider, repo: 'o/r' })).toBeNull();
-  const onB = await lookupSnapshot({ provider: fake('b').provider, repo: 'o/r' });
-  expect(onB?.createdAt).not.toBeNull();
+test('a bake on one provider leaves the other provider without a bake', async () => {
+  const { ctx, fake, addOrigin } = context({ flag: 'b' });
+  await addOrigin({ repo: 'o/r' });
+  await silenced(() => bake({ ctx, args: ['o/r'] }));
+  const spec = repoSpecFor({ config: ctx.config, repo: 'o/r', install: null, warm: null, baseBranch: null });
+  expect(await fake('a').provider.bakedAt({ repo: spec })).toBeNull();
+  expect(await fake('b').provider.bakedAt({ repo: spec })).not.toBeNull();
 });
 
-async function seedBox({ ctx, id, name }: { ctx: ReturnType<typeof context>['ctx']; id: string; name: string }) {
+async function seedBox({ ctx, id, name }: { ctx: { providers: Provider[] }; id: string; name: string }) {
   const provider = ctx.providers.find((p) => p.id === id);
-  await provider?.create({ name, image: 'i', workdir: '/w', idle: null });
+  await provider?.start({
+    name,
+    repo: null,
+    branch: null,
+    source: 'fresh',
+    image: null,
+    idle: { minutes: 15 },
+    credentials: { variables: {}, git: null },
+    gitIdentity: null,
+  });
 }
 
 test('a box on one provider is found without a flag', async () => {
@@ -94,11 +115,9 @@ test('a name on both providers is ambiguous until --provider picks one', async (
     'a sandbox named "dev" exists on a and b; pass --provider <a|b> to pick one'
   );
 
-  const log = spyOn(console, 'log').mockImplementation(() => {});
-  await down({ ctx: { ...ctx, flag: 'b' }, args: ['dev'] });
-  log.mockRestore();
-  expect([...fake('a').alive]).toEqual(['dev']);
-  expect([...fake('b').alive]).toEqual([]);
+  await silenced(() => down({ ctx: { ...ctx, flag: 'b' }, args: ['dev'] }));
+  expect(fake('a').alive()).toEqual(['dev']);
+  expect(fake('b').alive()).toEqual([]);
   expect((await findBoxProvider({ ctx, name: 'dev' })).id).toBe('a');
 });
 
