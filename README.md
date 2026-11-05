@@ -1,168 +1,113 @@
 # local2b
 
-`l2b` is a thin, opinionated layer that lets coding agents (pi, Claude Code, Codex, ...) and humans run heavy repo work on remote sandboxes: full typechecks, test suites, dependency installs, dev servers. It adds sane defaults and guardrails, and it reuses the setup you already have locally (your `gh` login, Doppler or env secrets, a local config file) instead of making you rebuild it in the cloud.
+Run heavy repo work on remote sandboxes instead of your laptop: typechecks, test suites, installs, dev servers. `l2b` is a small CLI for coding agents and humans, built on [e2b](https://e2b.dev).
 
-It is a workflow layer, not a new sandbox. Providers are pluggable; [e2b](https://e2b.dev) is the only one so far.
+    l2b run --repo my-org/my-repo --branch feature/x -- yarn test
 
-## Why not just use the e2b CLI or SDK?
+That starts a box, checks out the branch with dependencies installed, runs the command, destroys the box, and hands you the exit code.
 
-You can, and l2b is built on the e2b SDK. What l2b adds is the part every team ends up scripting around it:
+## Why not just the e2b CLI?
 
-1. **Credentials stay local.** A GitHub token (`GH_TOKEN` or `gh auth token`) and any Doppler or env secrets are resolved on your machine at call time and written to the sandbox's tmpfs. They are never baked into an image or snapshot, and snapshots are filesystem-only.
-2. **Repo-aware fast start.** Bake a repo once (shallow partial mirror, installed dependencies, optional codegen). After that a box is a branch switch plus an incremental install, roughly 30-60 seconds, instead of minutes for a clone and full install.
-3. **One-call lifecycle.** `l2b run --repo o/r --branch b -- <cmd>` creates a box, runs the command, and always destroys the box, even on failure or interrupt. The command's exit code passes through and progress goes to stderr.
-4. **Implicit cleanup.** Idle expiry is enforced server-side by the provider, and a heartbeat holds it off only while a command is running, so an agent that forgets (or crashes) cannot leak a box.
-5. **Agent ergonomics.** A bundled skill tells agents when to reach for l2b, `exec` defaults to the repo checkout, and every `run` ends with an unambiguous `command exited <code>` line.
-6. **Provider-agnostic interfaces.** Commands talk to small `Provider` and `Box` interfaces, so another backend does not change the workflow.
+l2b uses the e2b SDK. It adds the parts you would otherwise script yourself:
 
-| | l2b | raw e2b CLI / SDK |
-| --- | --- | --- |
-| Secrets | Pushed from your machine to tmpfs per call; never in images or snapshots | You decide, and wire it yourself |
-| GitHub access | Your `gh` token, with git credential helper configured | Set up auth in every sandbox |
-| Repo start | Baked snapshot: branch switch + incremental install | Clone and install each time, or build your own templates |
-| One-off command | `l2b run`: create, run, always destroy, exit code passes through | Script create / run / kill with your own error handling |
-| Leaked boxes | Server-side idle expiry plus a heartbeat during commands | Your timeout choices and your cleanup code |
-| Agent use | Skill, default cwd, `command exited <code>` line | Not provided |
-| Other providers | Same commands via the `Provider` interface | Tied to e2b |
+- **Your credentials, never baked in.** Your `gh` token and any Doppler or env secrets are pushed to the box's tmpfs on each call. Images and snapshots never contain them.
+- **Fast starts.** Bake a repo once. A box is then a branch switch plus an incremental install, about a minute instead of a clone and full install.
+- **Cleanup you can't forget.** `run` always destroys its box, and idle boxes expire server-side.
+- **Built for agents.** A skill says when to use it, commands default to the repo checkout, and every `run` ends with `command exited <code>`.
 
-## Limits
-
-- A workflow layer over a sandbox provider, not a sandbox itself.
-- e2b is the only provider today.
-- GitHub is the only supported git host.
-- It spends real e2b compute and money; boxes are billed while they run.
-- Baking is manual: re-run `l2b bake` when a repo's dependencies drift far from the snapshot.
-- Boxes are disposable. Push a branch to keep work.
-
-## How it works
-
-Three layers. An **image** holds tooling only (Node, git, gh, Doppler, Docker, Postgres, Redis, plus your configured extras); it holds no repo and no credentials, and is built once with `l2b image build`. A **snapshot** is a per-repo, filesystem-only capture on top of that image, made by `l2b bake`: a bare partial mirror, a checkout, installed dependencies and any `warm` step output, with credentials scrubbed first. A **box** is a running sandbox started from the snapshot (or from the plain image when no snapshot exists). `up` writes credentials to the box's tmpfs, switches the checkout to your branch, and runs your `install` command incrementally. When the box is done it is destroyed or expires.
+Limits: e2b is the only provider, you pay for the compute, and you re-bake when a repo drifts far from its snapshot.
 
 ## Quick start
 
+You need [Bun](https://bun.sh), an `E2B_API_KEY`, and `gh` (or `GH_TOKEN`). Doppler is optional.
+
     bun install
-    cp config.example.json ~/.config/l2b/config.json   # edit to taste
-    bun src/cli.ts image build                          # once: build the base image
-    bun src/cli.ts bake my-org/my-repo                  # once per repo: mirror + warm install
-    bun src/cli.ts run --repo my-org/my-repo --branch feature/x -- yarn test   # one-shot
-    bun src/cli.ts up task1 --repo my-org/my-repo --branch feature/x           # or a session
-    bun src/cli.ts exec task1 -- yarn test
-    bun src/cli.ts url task1 3000
-    bun src/cli.ts down task1
-
-Run `bun src/cli.ts install` to put `l2b` on your PATH (`~/.local/bin`) and link the agent skill into `~/.agents/skills` and `~/.claude/skills`. Requires [Bun](https://bun.sh), and `gh` for GitHub auth (or `GH_TOKEN`; GitLab uses `GITLAB_TOKEN` or `glab`). Doppler is optional.
-
-## `run` or `up`/`exec`/`down`
-
-Use `run` for one-off work: "run the tests, typecheck, or build and tell me the result". It cleans up after itself and returns the command's exit code. Add `--keep` to leave the box up for follow-ups.
-
-Use `up`, `exec`, `down` when several commands need the same checkout: debugging, editing, a dev server you want a public `url` for. The box then lives until you `down` it or it goes idle.
+    mkdir -p ~/.config/l2b && cp config.example.json ~/.config/l2b/config.json
+    bun src/cli.ts install      # puts l2b on your PATH, links the agent skill
+    l2b image build             # once
+    l2b bake my-org/my-repo     # once per repo
+    l2b run --repo my-org/my-repo --branch main -- yarn test
 
 ## Commands
 
-| Command | What it does |
-| --- | --- |
-| `run [--repo o/r] [--branch b] [--keep] -- <cmd...>` | One-shot: create a box, run the command in the checkout, always destroy it; exit code passes through |
-| `up <name> [--repo o/r] [--branch b] [--full] [--doppler p/c] [--image ref]` | Create a sandbox, push credentials, check out a branch |
-| `bake <o/r> [--install cmd] [--warm cmd] [--branch b] [--if-older-than 12h]` | Build a per-repo snapshot: bare partial mirror plus a warm install. With `--if-older-than`, exits 0 without baking if the snapshot is newer than that (`m`, `h`, `d`, `w`) |
-| `exec <name> [--cwd dir] -- <cmd...>` | Run a command with secrets in its environment; defaults to the repo checkout |
-| `shell <name>` | Interactive terminal (needs a TTY) |
-| `install` | Put `l2b` on PATH and link the agent skill |
-| `creds <name>` | Re-push credentials |
-| `url <name> <port>` | Public URL for a port |
-| `ls`, `pause <name>`, `down <name>` | Lifecycle |
-| `image build` | Build the provider's base image |
+- `run [--repo o/r] [--branch b] [--keep] -- <cmd...>`: one-shot. Create a box, run the command, destroy the box. Exit code passes through.
+- `up <name> [--repo o/r] [--branch b] [--full] [--doppler p/c] [--image ref]`: create a box and check out a branch.
+- `exec <name> [--cwd dir] -- <cmd...>`: run a command in a box. Defaults to the repo checkout.
+- `shell <name>`: interactive terminal (needs a TTY).
+- `down <name>`, `pause <name>`, `ls`: lifecycle.
+- `url <name> <port>`: public URL for a port.
+- `creds <name> [--repo o/r]`: re-push credentials.
+- `bake <o/r> [--install cmd] [--warm cmd] [--branch b] [--if-older-than 12h]`: build the repo snapshot.
+- `image build`: build the base image.
+- `install`: put `l2b` on PATH and link the agent skill.
 
-`up` uses the repo's snapshot when one exists: a branch switch in the baked checkout plus an incremental install, so a box is ready in about a minute. Without one it falls back to a shallow partial clone. `--full` forces a full clone.
+Use `run` for one-off work. Use `up`, `exec` and `down` when several commands need the same checkout, or you want a dev server behind a `url`.
 
-## Keeping snapshots fresh
+## How it works
 
-A snapshot goes stale as the base branch moves, and `up` then spends longer catching up. When a snapshot is older than `staleSnapshotHours` (config, default 72), `up` and `run` print a one-line re-bake hint on stderr. The e2b SDK doesn't report snapshot creation time, so `bake` records it in `$XDG_STATE_HOME/l2b/bakes.json` (default `~/.local/state/l2b/`); a snapshot baked on another machine has no known age and gets no hint.
+An **image** holds tooling only: Node, git, gh, Docker and whatever else you configure. `l2b image build` makes it once. A **snapshot** is a per-repo disk capture on top of that image, made by `l2b bake`: a shallow mirror, a checkout, installed dependencies, and any codegen from `warm`. A **box** is a sandbox started from the snapshot. `up` pushes credentials, switches the checkout to your branch, and runs `install` incrementally.
 
-Refresh on a schedule with `--if-older-than`, which makes the job cheap when nothing is due:
-
-    # cron: every night at 03:00
-    0 3 * * * l2b bake my-org/my-repo --if-older-than 20h
-
-    # launchd: ~/Library/LaunchAgents/dev.l2b.bake.plist
-    <plist version="1.0"><dict>
-      <key>Label</key><string>dev.l2b.bake</string>
-      <key>ProgramArguments</key><array>
-        <string>/Users/you/.local/bin/l2b</string><string>bake</string>
-        <string>my-org/my-repo</string><string>--if-older-than</string><string>20h</string>
-      </array>
-      <key>StartCalendarInterval</key><dict><key>Hour</key><integer>3</integer></dict>
-    </dict></plist>
-
-    # systemd: l2b-bake.service (oneshot) + l2b-bake.timer
-    [Service]
-    Type=oneshot
-    ExecStart=%h/.local/bin/l2b bake my-org/my-repo --if-older-than 20h
-    [Timer]
-    OnCalendar=*-*-* 03:00:00
-    Persistent=true
+Boxes expire 15 minutes after the last l2b activity, and a heartbeat holds that off while a command runs. Push a branch to keep work.
 
 ## Credentials
 
-Nothing secret is ever baked into an image or snapshot. At call time, `l2b` resolves a git host token (GitHub: `GH_TOKEN`, or `gh auth token`) plus any configured secret sources locally, and writes them to the sandbox's tmpfs (`/dev/shm/l2b.env`, mode 600), which every `exec` sources. Snapshots are filesystem-only and the file is removed before snapshotting. A paused sandbox still holds its memory, so treat it as holding secrets.
+Nothing secret goes into an image or snapshot. At call time, l2b resolves a git host token and your configured secrets locally and writes them to `/dev/shm/l2b.env` in the box (tmpfs, mode 600). Every `exec` sources that file. Bake deletes it before snapshotting, and snapshots are filesystem-only.
 
-Secret sources (`secrets` in config, or `--doppler project/config`): `doppler`, or `env` (a list of local env var names). Provider API keys use the same mechanism via a value reference, e.g. `{ "from": "doppler", ... }` or `{ "from": "env", "name": "E2B_API_KEY" }`.
+Anything the box runs can read those secrets, and a paused box keeps them in memory. Use a scoped `GH_TOKEN` rather than your full `gh` login if that matters to you.
+
+Secret sources are `doppler` (`--doppler project/config` or `secrets` in config) or `env` (local variable names). Provider API keys use the same mechanism through a value reference such as `{ "from": "doppler", "project": "p", "config": "dev", "name": "E2B_API_KEY" }`.
 
 ## Config
 
-`$L2B_CONFIG`, else `$XDG_CONFIG_HOME/l2b/config.json` (default `~/.config/l2b/config.json`). See `config.example.json`. Every field has a default, so a missing file works if `E2B_API_KEY` is set.
+`$L2B_CONFIG`, else `~/.config/l2b/config.json`. Every key has a default. See `config.example.json`.
 
 | Key | Default | Meaning |
 | --- | --- | --- |
 | `provider` | `"e2b"` | Sandbox provider |
-| `image` | provider default | Override the base image |
+| `image` | provider default | Base image override |
 | `secrets` | `[]` | Sources pushed into every box: `{ "type": "doppler", "project", "config" }` or `{ "type": "env", "names": [...] }` |
-| `gitHost` | `{ "type": "github" }` | Git remote host and auth; see Git hosts |
-| `repos.<o/r>.gitHost` | global `gitHost` | Per-repo override |
-| `idle.minutes` | `15` | Box expires this long after the last l2b activity |
-| `idle.action` | `"kill"` | `kill` discards the box; `pause` keeps disk and memory (and secrets) |
-| `cloneDepth` | `50` | Commits of history kept in a baked mirror |
-| `repos.<o/r>.baseBranch` | repo default branch | Branch the snapshot is baked from |
-| `repos.<o/r>.install` | none | Runs in the checkout on every `up`; keep it fast and incremental |
-| `repos.<o/r>.warm` | none | One-time work at bake only (codegen, builds); output ships in the snapshot |
-| `repos.<o/r>.env` | `{}` | Plain variables set in every box for this repo (not secret; survive `creds` refresh) |
-| `e2b.apiKey` | `{ "from": "env", "name": "E2B_API_KEY" }` | Value reference: `env` or `doppler` |
-| `e2b.cpuCount` | `4` | vCPUs at image build |
-| `e2b.memoryMB` | `8192` | Memory at image build |
-| `e2b.features` | all | Tooling baked into the image: `node`, `gh`, `doppler`, `docker`, `postgres`, `redis`, `ripgrep`, `tmux` (core git/curl/jq/sudo/build-essential/python3 always present; `[]` for a lean image) |
-| `e2b.nodeMajor` | `24` | Node.js major version for the `node` feature |
-| `e2b.npmGlobals` | `[]` | npm packages installed globally in the image (requires `node`) |
-| `e2b.aptPackages` | `[]` | Extra apt packages in the image |
-| `e2b.imageCommands` | `[]` | Shell commands run as the box user at image build, e.g. to install a toolchain |
+| `gitHost` | `{ "type": "github" }` | See Git hosts |
+| `idle.minutes` | `15` | Idle time before a box expires |
+| `idle.action` | `"kill"` | `kill` discards the box; `pause` keeps disk and memory |
+| `cloneDepth` | `50` | Commits kept in a baked mirror |
+| `staleSnapshotHours` | `72` | `up` and `run` hint to re-bake past this age |
+| `repos.<o/r>.baseBranch` | repo default | Branch the snapshot is baked from |
+| `repos.<o/r>.install` | none | Runs on every `up`. Keep it incremental |
+| `repos.<o/r>.warm` | none | Runs at bake only (codegen, builds). Output ships in the snapshot |
+| `repos.<o/r>.env` | `{}` | Plain, non-secret variables set in every box for this repo |
+| `repos.<o/r>.gitHost` | global | Per-repo override |
+| `e2b.apiKey` | env `E2B_API_KEY` | Value reference: `env` or `doppler` |
+| `e2b.cpuCount`, `e2b.memoryMB` | `4`, `8192` | Box size at image build |
+| `e2b.features` | all | Image tooling: `node`, `gh`, `doppler`, `docker`, `postgres`, `redis`, `ripgrep`, `tmux`. `[]` for a lean image |
+| `e2b.nodeMajor` | `24` | Node version for the `node` feature |
+| `e2b.npmGlobals`, `e2b.aptPackages` | `[]` | Extra packages in the image |
+| `e2b.imageCommands` | `[]` | Shell commands run as the box user at image build, for toolchains |
 
-Image settings (`e2b.*`) take effect on the next `l2b image build`; per-repo `warm` and `baseBranch` on the next `l2b bake`.
-
-## Roadmap
-
-Planned, not yet available: a provider home-directory setting, and `bake --if-older-than`.
+Image settings apply on the next `l2b image build`. `baseBranch` and `warm` apply on the next `l2b bake`.
 
 ## Git hosts
 
-GitHub is the default. Set `gitHost` globally, or per repo under `repos.<o/r>.gitHost`:
+GitHub is the default and uses `GH_TOKEN` or `gh auth token`. GitLab (`{ "type": "gitlab", "baseUrl": "https://gitlab.com" }`) uses `GITLAB_TOKEN` or `glab auth token`. Bitbucket, Gitea and other https hosts use `generic`:
 
-| `type` | Fields | Token source | Exported as |
-| --- | --- | --- | --- |
-| `github` | none | `GH_TOKEN`, `GITHUB_TOKEN`, or `gh auth token` | `GH_TOKEN` |
-| `gitlab` | `baseUrl` (default `https://gitlab.com`) | `GITLAB_TOKEN`, or `glab auth token` | `GITLAB_TOKEN` |
-| `generic` | `baseUrl`, `username`, `token` (value reference) | the value reference | `L2B_GIT_TOKEN` |
+    { "type": "generic", "baseUrl": "https://bitbucket.org", "username": "x-token-auth",
+      "token": { "from": "env", "name": "BITBUCKET_TOKEN" } }
 
-`generic` covers Bitbucket, Gitea and other self-hosted https hosts, e.g. `{ "type": "generic", "baseUrl": "https://bitbucket.org", "username": "x-token-auth", "token": { "from": "env", "name": "BITBUCKET_TOKEN" } }`. The in-sandbox git credential helper is scoped to the host's origin. `l2b creds <name> --repo o/r` refreshes the token for that repo's host.
+## Keeping snapshots fresh
+
+A stale snapshot makes `up` slower. `bake --if-older-than` skips the work when the snapshot is recent, so a scheduled job can call it often:
+
+    0 3 * * * l2b bake my-org/my-repo --if-older-than 20h
+
+l2b records bake times in `$XDG_STATE_HOME/l2b/bakes.json`. A snapshot baked elsewhere has no known age.
 
 ## Adding a provider
 
-Implement `Provider` and `Box` from `src/providers/types.ts`, register it in `src/providers/index.ts`, and add its config block to `src/config.ts`. Commands only talk to those interfaces; the e2b implementation in `src/providers/e2b/` is the reference.
+Implement `Provider` and `Box` from `src/providers/types.ts`, register it in `src/providers/index.ts`, and add its config block to `src/config.ts`. The e2b provider in `src/providers/e2b/` is the reference.
 
 ## Development
 
     bun run typecheck
     bun test
-
-The git scripts and credential file are tested against real local git repos and a real shell.
 
 ## License
 
