@@ -1,9 +1,20 @@
-import { BoatApi, Configuration, ResponseError } from '@boatdev/sdk';
+import type { BoatApi } from '@boatdev/sdk';
 import type { Config } from '../../config';
 import { resolveValue, type ValueRef } from '../../secrets';
 import { ProviderAuthError } from '../types';
 
 const BASE_PATH = 'https://boat.dev/api/v1';
+
+/** The SDK is large; loading it on first use keeps it off the path of commands that never talk to boat. */
+export const loadSdk = () => import('@boatdev/sdk');
+
+/** The HTTP response behind an SDK `ResponseError`, or null. */
+export function responseOf(err: unknown): Response | null {
+  if (err instanceof Error && err.name === 'ResponseError' && 'response' in err && err.response instanceof Response) {
+    return err.response;
+  }
+  return null;
+}
 
 function describeRef({ ref }: { ref: ValueRef }) {
   switch (ref.from) {
@@ -33,6 +44,7 @@ export function boatClient({ config }: { config: Pick<Config['boat'], 'apiKey'> 
       const reason = err instanceof Error ? err.message : String(err);
       throw new ProviderAuthError({ provider: 'boat', hint: `${reason}; ${describeRef({ ref: config.apiKey })}` });
     }
+    const { BoatApi, Configuration } = await loadSdk();
     return new BoatApi(new Configuration({ basePath: BASE_PATH, accessToken: key }));
   };
   return () => {
@@ -44,7 +56,7 @@ export function boatClient({ config }: { config: Pick<Config['boat'], 'apiKey'> 
   };
 }
 
-export const isStatus = (err: unknown, status: number) => err instanceof ResponseError && err.response.status === status;
+export const isStatus = (err: unknown, status: number) => responseOf(err)?.status === status;
 
 /**
  * Runs one API call and turns boat's error envelope into a readable error.
@@ -54,10 +66,11 @@ export async function boatCall<T>({ what, call }: { what: string; call: () => Pr
   try {
     return await call();
   } catch (err) {
-    if (!(err instanceof ResponseError)) throw err;
-    const status = err.response.status;
-    const body = (await err.response.clone().json().catch(() => null)) as { code?: string; message?: string } | null;
-    const detail = [body?.code, body?.message].filter(Boolean).join(': ') || err.response.statusText;
+    const response = responseOf(err);
+    if (!response) throw err;
+    const status = response.status;
+    const body = (await response.clone().json().catch(() => null)) as { code?: string; message?: string } | null;
+    const detail = [body?.code, body?.message].filter(Boolean).join(': ') || response.statusText;
     if (status === 401) {
       throw new ProviderAuthError({ provider: 'boat', hint: `boat rejected the API key (${detail}); check boat.apiKey` });
     }

@@ -1,4 +1,4 @@
-import { ResponseError, runCommand, waitUntilReady, type BoatApi, type Sandbox } from '@boatdev/sdk';
+import type { BoatApi, Sandbox } from '@boatdev/sdk';
 import type { Config } from '../../config';
 import { step } from '../../progress';
 import { withHeartbeat } from '../../toolkit/keepalive';
@@ -6,7 +6,7 @@ import type { Machine, MachineHost } from '../../toolkit/machine';
 import { runChecked, withEnv } from '../../toolkit/session';
 import { shellQuote } from '../../shell';
 import { UnsupportedError, type PublicUrl } from '../types';
-import { boatCall, boatClient, isNotFound } from './api';
+import { boatCall, boatClient, isNotFound, loadSdk, responseOf } from './api';
 import {
   BASE_SNAPSHOT,
   HOME_DIR,
@@ -57,6 +57,7 @@ function wrapSandbox({ api, sandbox, idleMs }: { api: BoatApi; sandbox: Pick<San
       let processId: number | null = null;
       let finished = false;
       try {
+        const { runCommand } = await loadSdk();
         for await (const frame of runCommand(api, sandboxId, inDirCommand({ cwd, cmd }))) {
           if (frame.type === 'started') processId = Number(frame.processId);
           else if (frame.type === 'stdout' || frame.type === 'stderr') {
@@ -136,8 +137,9 @@ async function retryStarts<T>(call: () => Promise<T>): Promise<T> {
       return await call();
     } catch (err) {
       const cause = err instanceof Error && 'cause' in err ? err.cause : err;
-      if (!(cause instanceof ResponseError) || cause.response.status !== 429 || attempt >= RATE_LIMIT_RETRIES) throw err;
-      const wait = Number(cause.response.headers.get('retry-after')) || 30;
+      const response = responseOf(cause);
+      if (response?.status !== 429 || attempt >= RATE_LIMIT_RETRIES) throw err;
+      const wait = Number(response.headers.get('retry-after')) || 30;
       if (wait > RATE_LIMIT_MAX_WAIT_S) throw err;
       step(`boat start limit reached, retrying in ${wait}s`);
       await Bun.sleep(wait * 1000);
@@ -237,6 +239,7 @@ export function createBoatHosts({ config, idle }: { config: Config['boat']; idle
       sandboxId = created.sandbox.id;
     }
     try {
+      const { waitUntilReady } = await loadSdk();
       await waitUntilReady(client, sandboxId, { timeoutMs: READY_TIMEOUT_MS });
     } catch (err) {
       await client.deleteSandbox({ sandboxId, xAsciiConfirmDelete: sandboxId }).catch(() => {});
