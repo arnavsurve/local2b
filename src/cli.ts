@@ -11,11 +11,11 @@ import { install } from './commands/install';
 import { up } from './commands/up';
 import { url } from './commands/url';
 import { createContext, type Command } from './context';
-import { commandHelp, isCommandName, rootHelp, wantsHelp } from './help';
+import { commandHelp, isCommandName, rootHelp, wantsHelp, type CommandName } from './help';
 import { extractProviderFlag } from './providers/select';
 import { CommandFailedError } from './session';
 
-const commands: Record<string, Command> = {
+const commands: Record<CommandName, Command> = {
   run,
   up,
   image,
@@ -37,8 +37,7 @@ async function main() {
     console.log(rootHelp());
     return;
   }
-  const handler = isCommandName(name) ? commands[name] : undefined;
-  if (!handler || !isCommandName(name)) {
+  if (!isCommandName(name)) {
     console.error(`l2b: unknown command '${name}'\n`);
     console.error(rootHelp());
     process.exitCode = 1;
@@ -48,7 +47,7 @@ async function main() {
     console.log(commandHelp(name));
     return;
   }
-  await handler({ ctx: await createContext({ flag: providerId }), args });
+  await commands[name]({ ctx: await createContext({ flag: providerId }), args });
 }
 
 main().catch((err) => {
