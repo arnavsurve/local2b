@@ -1,16 +1,16 @@
 import { readFileSync, statSync } from 'node:fs';
-import type { Box } from './providers/types';
+import type { Machine } from './toolkit/machine';
 import { CommandFailedError } from './session';
 import { parentDir, shellQuote } from './shell';
 
 /** Relative paths resolve against the box workdir; `~/` against the home directory. */
-export function remotePath({ box, path }: { box: Pick<Box, 'workdir' | 'homeDir'>; path: string }) {
+export function remotePath({ box, path }: { box: Pick<Machine, 'workdir' | 'homeDir'>; path: string }) {
   if (path.startsWith('/')) return path;
   if (path.startsWith('~/')) return `${box.homeDir}/${path.slice(2)}`;
   return `${box.workdir}/${path}`;
 }
 
-async function plainExec({ box, cmd }: { box: Box; cmd: string }) {
+async function plainExec({ box, cmd }: { box: Machine; cmd: string }) {
   const exitCode = await box.exec({
     cmd,
     cwd: '/',
@@ -27,7 +27,7 @@ export async function putContent({
   executable,
   remote,
 }: {
-  box: Box;
+  box: Machine;
   content: string;
   executable: boolean;
   remote: string;
@@ -51,7 +51,7 @@ export function decodeText({ bytes, what }: { bytes: Uint8Array; what: string })
   }
 }
 
-export async function putLocalFile({ box, localPath, remote }: { box: Box; localPath: string; remote: string }) {
+export async function putLocalFile({ box, localPath, remote }: { box: Machine; localPath: string; remote: string }) {
   let bytes: Uint8Array;
   let executable: boolean;
   try {

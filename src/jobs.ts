@@ -1,18 +1,18 @@
 import { randomBytes } from 'node:crypto';
-import type { Box } from './providers/types';
+import type { Machine } from './toolkit/machine';
 import { withEnv } from './session';
 import { shellQuote } from './shell';
 
 export type JobStatus = { state: 'running' } | { state: 'exited'; exitCode: number };
 
-const jobsRoot = ({ box }: { box: Box }) => `${box.homeDir}/.l2b-jobs`;
+const jobsRoot = ({ box }: { box: Machine }) => `${box.homeDir}/.l2b-jobs`;
 
-function jobDir({ box, id }: { box: Box; id: string }) {
+function jobDir({ box, id }: { box: Machine; id: string }) {
   if (!/^[A-Za-z0-9_-]+$/.test(id)) throw new Error(`no job "${id}" (try: l2b jobs <name>)`);
   return `${jobsRoot({ box })}/${id}`;
 }
 
-async function capture({ box, cmd, cwd }: { box: Box; cmd: string; cwd: string }) {
+async function capture({ box, cmd, cwd }: { box: Machine; cmd: string; cwd: string }) {
   let out = '';
   const exitCode = await box.exec({
     cmd,
@@ -29,7 +29,7 @@ async function capture({ box, cmd, cwd }: { box: Box; cmd: string; cwd: string }
  * exec session so it outlives the tool call. Combined output goes to `log`;
  * the exit code lands in `status` only when the command finishes.
  */
-export async function startJob({ box, cwd, cmd }: { box: Box; cwd: string; cmd: string }) {
+export async function startJob({ box, cwd, cmd }: { box: Machine; cwd: string; cmd: string }) {
   const id = `${Date.now().toString(36)}-${randomBytes(2).toString('hex')}`;
   const dir = jobDir({ box, id });
   const body = `(${withEnv({ homeDir: box.homeDir, cmd })}) > ${dir}/log 2>&1; echo $? > ${dir}/status.tmp; mv ${dir}/status.tmp ${dir}/status`;
@@ -54,27 +54,27 @@ function parseStatus({ id, text }: { id: string; text: string }): JobStatus {
   return { state: 'exited', exitCode: Number(trimmed) };
 }
 
-async function requireJob({ box, id }: { box: Box; id: string }) {
+async function requireJob({ box, id }: { box: Machine; id: string }) {
   const dir = jobDir({ box, id });
   const { exitCode } = await capture({ box, cwd: '/', cmd: `[ -d ${dir} ]` });
   if (exitCode !== 0) throw new Error(`no job "${id}" (try: l2b jobs <name>)`);
   return dir;
 }
 
-export async function jobStatus({ box, id }: { box: Box; id: string }) {
+export async function jobStatus({ box, id }: { box: Machine; id: string }) {
   const dir = await requireJob({ box, id });
   const { out } = await capture({ box, cwd: '/', cmd: statusScript({ dir }) });
   return parseStatus({ id, text: out });
 }
 
-export async function readLog({ box, id }: { box: Box; id: string }) {
+export async function readLog({ box, id }: { box: Machine; id: string }) {
   const dir = await requireJob({ box, id });
   const { out } = await capture({ box, cwd: '/', cmd: `cat ${dir}/log` });
   return out;
 }
 
 /** Streams the log until the job exits; resolves with the job's exit code. */
-export async function followLog({ box, id }: { box: Box; id: string }) {
+export async function followLog({ box, id }: { box: Machine; id: string }) {
   const dir = await requireJob({ box, id });
   const script = [
     `tail -n +1 -f ${dir}/log & T=$!`,
@@ -91,7 +91,7 @@ export async function followLog({ box, id }: { box: Box; id: string }) {
   });
 }
 
-export async function listJobs({ box }: { box: Box }) {
+export async function listJobs({ box }: { box: Machine }) {
   const root = jobsRoot({ box });
   const script = `for d in ${root}/*/; do [ -d "$d" ] || continue; printf '%s\\t%s\\t%s\\n' "$(basename "$d")" "$(if [ -f "$d/status" ]; then cat "$d/status"; else echo running; fi)" "$(cat "$d/cmd" 2>/dev/null)"; done`;
   const { out } = await capture({ box, cwd: '/', cmd: script });

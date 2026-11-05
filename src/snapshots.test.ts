@@ -6,7 +6,7 @@ import { bake } from './commands/bake';
 import { provisionBox } from './provision';
 import { snapshotName } from './repo';
 import { lookupSnapshot, recordBake } from './snapshots';
-import { fakeContext } from './test/fake-provider';
+import { fakeContext } from './test/fake-machine';
 
 const HOUR = 3_600_000;
 let stateDir = '';

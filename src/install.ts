@@ -1,4 +1,4 @@
-import type { Box } from './providers/types';
+import type { Machine } from './toolkit/machine';
 
 export type DetectedInstall = { command: string; reason: string };
 
@@ -25,7 +25,7 @@ export function detectInstall({ files }: { files: string[] }): DetectedInstall |
 }
 
 /** Lists the checkout root by running a real `ls -A` in the box. */
-export async function listRoot({ box, dir }: { box: Box; dir: string }) {
+export async function listRoot({ box, dir }: { box: Machine; dir: string }) {
   let out = '';
   const exitCode = await box.exec({
     cmd: 'ls -A',
@@ -44,7 +44,7 @@ export async function resolveInstall({
   dir,
   configured,
 }: {
-  box: Box;
+  box: Machine;
   dir: string;
   configured: string | null;
 }): Promise<DetectedInstall | null> {

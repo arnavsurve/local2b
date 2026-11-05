@@ -1,5 +1,5 @@
 import { credentialHelperCommand, resolveHostToken, type ResolvedGitHost } from './git-host';
-import type { Box } from './providers/types';
+import type { Machine } from './toolkit/machine';
 import { shellQuote } from './shell';
 import {
   loadSecrets,
@@ -35,7 +35,7 @@ export async function pushCreds({
   sources,
   host,
 }: {
-  box: Box;
+  box: Machine;
   sources: SecretSource[];
   host: ResolvedGitHost;
 }) {
@@ -62,13 +62,13 @@ export async function pushEnv({
   box,
   env,
 }: {
-  box: Box;
+  box: Machine;
   env: Record<string, string>;
 }) {
   await box.writeFile({ path: plainEnvFile({ homeDir: box.homeDir }), content: toEnvFile(env) });
 }
 
-export async function configureGit({ box, host }: { box: Box; host: ResolvedGitHost }) {
+export async function configureGit({ box, host }: { box: Machine; host: ResolvedGitHost }) {
   await run({ box, cmd: credentialHelperCommand(host), cwd: '/' });
 }
 
@@ -94,17 +94,17 @@ export function gitIdentityCommand({ identity }: { identity: GitIdentity }) {
   return `git config --global user.name ${shellQuote(identity.name)} && git config --global user.email ${shellQuote(identity.email)}`;
 }
 
-export async function configureGitIdentity({ box, identity }: { box: Box; identity: GitIdentity | null }) {
+export async function configureGitIdentity({ box, identity }: { box: Machine; identity: GitIdentity | null }) {
   if (!identity) return;
   await run({ box, cmd: gitIdentityCommand({ identity }), cwd: '/' });
 }
 
-export async function scrubCreds({ box }: { box: Box }) {
+export async function scrubCreds({ box }: { box: Machine }) {
   await box.exec({ cmd: `rm -f ${ENV_FILE}`, cwd: '/', onOutput: () => {} });
 }
 
 /** Streams output to this process and resolves with the remote exit code. */
-export function run({ box, cmd, cwd }: { box: Box; cmd: string; cwd: string }) {
+export function run({ box, cmd, cwd }: { box: Machine; cmd: string; cwd: string }) {
   return box.exec({
     cmd: withEnv({ homeDir: box.homeDir, cmd }),
     cwd,
@@ -120,7 +120,7 @@ export async function runChecked({
   cwd,
   what,
 }: {
-  box: Box;
+  box: Machine;
   cmd: string;
   cwd: string;
   what: string;

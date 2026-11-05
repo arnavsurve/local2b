@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { followLog, jobStatus, listJobs, readLog, startJob } from './jobs';
-import { fakeContext, withLocalShell } from './test/fake-provider';
+import { fakeContext, withLocalShell } from './test/fake-machine';
 
 async function localBox() {
   const homeDir = mkdtempSync(join(tmpdir(), 'l2b-jobs-'));

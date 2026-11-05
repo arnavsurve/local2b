@@ -4,7 +4,7 @@ import { resolveClone, type CloneOptions } from './config';
 import { hostFor, remoteUrl, type ResolvedGitHost } from './git-host';
 import { describeInstall, resolveInstall } from './install';
 import { step } from './progress';
-import type { Box } from './providers/types';
+import type { Machine } from './toolkit/machine';
 import { checkoutDir, mirrorDir } from './repo';
 import { shellQuote } from './shell';
 import { configureGit, configureGitIdentity, resolveGitIdentity, pushCreds, pushEnv, runChecked } from './session';
@@ -25,7 +25,7 @@ export type ProvisionOpts = {
  * The snapshot decides the layout, not the current config: a baked mirror is
  * used when present, otherwise the checkout is a plain clone fetched in place.
  */
-async function existingMirror({ box, repo }: { box: Box; repo: string }) {
+async function existingMirror({ box, repo }: { box: Machine; repo: string }) {
   const mirror = mirrorDir({ homeDir: box.homeDir, repo });
   const code = await box.exec({ cmd: `test -d ${shellQuote(mirror)}`, cwd: box.homeDir, onOutput: () => {} });
   return code === 0 ? mirror : null;
@@ -36,7 +36,7 @@ async function installDependencies({
   dir,
   configured,
 }: {
-  box: Box;
+  box: Machine;
   dir: string;
   configured: string | null;
 }) {
@@ -54,7 +54,7 @@ async function checkoutFromSnapshot({
   install,
   depth,
 }: {
-  box: Box;
+  box: Machine;
   repo: string;
   branch: string | null;
   install: string | null;
@@ -80,7 +80,7 @@ async function checkoutFromClone({
   clone,
   install,
 }: {
-  box: Box;
+  box: Machine;
   repo: string;
   host: ResolvedGitHost;
   branch: string | null;

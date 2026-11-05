@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { gitHostSchema, resolveGitHost } from './git-host';
 import { ENV_FILE, plainEnvFile, gitIdentityCommand, pushCreds, pushEnv, resolveGitIdentity } from './session';
-import { fakeContext } from './test/fake-provider';
+import { fakeContext } from './test/fake-machine';
 
 beforeAll(() => {
   process.env.GH_TOKEN = 'gh-test-token';

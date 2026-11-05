@@ -1,12 +1,13 @@
 import type { Context } from './context';
-import { ProviderAuthError, type Provider } from './providers/types';
+import { ProviderAuthError } from './providers/types';
+import type { MachineHost } from './toolkit/machine';
 
 type Probe =
-  | { provider: Provider; outcome: 'found' }
-  | { provider: Provider; outcome: 'absent' }
-  | { provider: Provider; outcome: 'skipped'; error: ProviderAuthError };
+  | { provider: MachineHost; outcome: 'found' }
+  | { provider: MachineHost; outcome: 'absent' }
+  | { provider: MachineHost; outcome: 'skipped'; error: ProviderAuthError };
 
-async function probe({ provider, name }: { provider: Provider; name: string }): Promise<Probe> {
+async function probe({ provider, name }: { provider: MachineHost; name: string }): Promise<Probe> {
   try {
     const found = await provider.exists({ name });
     return { provider, outcome: found ? 'found' : 'absent' };

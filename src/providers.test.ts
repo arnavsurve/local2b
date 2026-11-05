@@ -10,7 +10,7 @@ import { url } from './commands/url';
 import { findBoxProvider } from './find-box';
 import { lookupSnapshot } from './snapshots';
 import { snapshotName } from './repo';
-import { fakeMultiContext } from './test/fake-provider';
+import { fakeMultiContext } from './test/fake-machine';
 
 let stateDir = '';
 
