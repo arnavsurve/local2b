@@ -63,3 +63,17 @@ test('npm globals need the node feature', async () => {
   writeConfig(JSON.stringify({ e2b: { features: ['gh'], npmGlobals: ['bun'] } }));
   await expect(loadConfig()).rejects.toThrow(/node/);
 });
+
+test('a provider is configured when it has a block or is the default', async () => {
+  writeConfig(JSON.stringify({}));
+  expect((await loadConfig()).configuredProviders).toEqual(['e2b']);
+  writeConfig(JSON.stringify({ e2b: { cpuCount: 2 } }));
+  expect((await loadConfig()).configuredProviders).toEqual(['e2b']);
+});
+
+test('a repo can name its provider', async () => {
+  writeConfig(JSON.stringify({ repos: { 'o/r': { provider: 'e2b' }, 'o/s': {} } }));
+  const config = await loadConfig();
+  expect(config.repos['o/r']?.provider).toBe('e2b');
+  expect(config.repos['o/s']?.provider).toBeNull();
+});

@@ -7,6 +7,8 @@ description: Offload heavy dev work to a remote sandbox instead of this machine.
 
 `l2b` creates a sandbox ("box") with a repo checked out and credentials injected, runs commands in it, and cleans it up. Use it instead of local worktrees for heavy work.
 
+Several sandbox providers may be configured. Do not pass `--provider` unless the user asks; the configured default and the name lookup handle it.
+
 ## Use it by default for heavy work
 
 When the task is a typecheck, a test suite, an install, a build, or a dev server in a big repo, start a box straight away. You do not need a local checkout, a `git pull`, or a worktree first: `up` fetches and checks out the branch itself. Do not run `git pull` or `yarn install` in the user's own checkout to set up a run.

@@ -11,6 +11,7 @@ import { install } from './commands/install';
 import { up } from './commands/up';
 import { url } from './commands/url';
 import { createContext, type Command } from './context';
+import { extractProviderFlag } from './providers/select';
 import { CommandFailedError } from './session';
 
 const USAGE = `l2b - remote dev sandboxes
@@ -24,9 +25,11 @@ const USAGE = `l2b - remote dev sandboxes
   l2b install                                  put l2b on PATH and link the agent skill
   l2b url <name> <port>                        public URL for a port
   l2b image build                              build the base image for the configured provider
-  l2b ls
+  l2b ls                                       boxes on every configured provider
   l2b pause <name>
   l2b down <name>
+
+  --provider <id> (any command) picks the provider; also L2B_PROVIDER and repos.<o/r>.provider in the config
 `;
 
 const commands: Record<string, Command> = {
@@ -45,14 +48,15 @@ const commands: Record<string, Command> = {
 };
 
 async function main() {
-  const [name, ...args] = process.argv.slice(2);
+  const { providerId, args: argv } = extractProviderFlag({ args: process.argv.slice(2) });
+  const [name, ...args] = argv;
   const handler = name ? commands[name] : undefined;
   if (!handler) {
     console.log(USAGE);
     process.exitCode = name ? 1 : 0;
     return;
   }
-  await handler({ ctx: await createContext(), args });
+  await handler({ ctx: await createContext({ flag: providerId }), args });
 }
 
 main().catch((err) => {

@@ -1,9 +1,9 @@
 import { parseArgs } from 'node:util';
 import { requirePositional } from '../args';
-import type { Command } from '../context';
+import { selectForRepo, type Command } from '../context';
 import { provisionBox } from '../provision';
 
-export const up: Command = async ({ ctx, args }) => {
+export const up: Command = async ({ ctx: base, args }) => {
   const { values, positionals } = parseArgs({
     args,
     allowPositionals: true,
@@ -17,6 +17,7 @@ export const up: Command = async ({ ctx, args }) => {
     },
   });
   const name = requirePositional({ positionals, index: 0, usage: 'l2b up <name>' });
+  const ctx = selectForRepo({ ctx: base, repo: values.repo ?? null });
   const box = await provisionBox({
     ctx,
     opts: {

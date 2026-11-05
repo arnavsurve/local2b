@@ -3,9 +3,10 @@ import { join } from 'node:path';
 import { z } from 'zod';
 import { DEFAULT_FEATURES, featureSchema } from './providers/e2b/image';
 import { gitHostSchema } from './git-host';
+import { PROVIDER_IDS } from './providers/ids';
 import { secretSourceSchema, valueRefSchema } from './secrets';
 
-const e2bConfigSchema = z
+export const e2bConfigSchema = z
   .object({
   apiKey: valueRefSchema.default({ from: 'env', name: 'E2B_API_KEY' }),
   cpuCount: z.number().int().positive().default(4),
@@ -32,8 +33,8 @@ const idleSchema = z.object({
   action: z.enum(['kill', 'pause']).default('kill'),
 });
 
-export const configSchema = z.object({
-  provider: z.enum(['e2b']).default('e2b'),
+const rawConfigSchema = z.object({
+  provider: z.enum(PROVIDER_IDS).default('e2b'),
   /** Overrides the provider's default base image. */
   image: z.string().nullable().default(null),
   /** Boxes expire this long after the last l2b activity against them. */
@@ -51,6 +52,8 @@ export const configSchema = z.object({
     .record(
       z.string(),
       z.object({
+        /** Provider used for this repo, ahead of the top-level `provider`. */
+        provider: z.string().nullable().default(null),
         /** Overrides the global `gitHost` for this repo. */
         gitHost: gitHostSchema.nullable().default(null),
         /** Branch the snapshot is baked from (the one you mostly work off), when it is not the repo's default branch. */
@@ -64,8 +67,20 @@ export const configSchema = z.object({
       })
     )
     .default({}),
-  e2b: e2bConfigSchema.default(e2bConfigSchema.parse({})),
+  e2b: e2bConfigSchema.optional(),
 });
+
+/**
+ * Provider blocks stay optional so a provider can be told apart as "has a
+ * block" (configured) from "defaults only". Blocks are filled in with their
+ * defaults here, so consumers always see a complete one.
+ */
+export const configSchema = rawConfigSchema.transform((raw) => ({
+  ...raw,
+  e2b: raw.e2b ?? e2bConfigSchema.parse({}),
+  /** Providers with a config block, plus the default one. */
+  configuredProviders: PROVIDER_IDS.filter((id) => id === raw.provider || raw[id] !== undefined),
+}));
 export type Config = z.infer<typeof configSchema>;
 
 export function configPath() {

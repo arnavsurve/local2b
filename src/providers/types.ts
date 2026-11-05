@@ -69,3 +69,15 @@ export type Provider = {
   /** Builds the tooling-only base image and returns its reference. */
   buildImage(): Promise<string>;
 };
+
+/**
+ * Thrown when a provider has no usable credentials. `l2b` skips such a
+ * provider when it searches every configured provider, but reports the error
+ * when the user picked that provider explicitly.
+ */
+export class ProviderAuthError extends Error {
+  constructor({ provider, hint }: { provider: string; hint: string }) {
+    super(`provider ${provider} cannot authenticate: ${hint}`);
+    this.name = 'ProviderAuthError';
+  }
+}
