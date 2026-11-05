@@ -7,7 +7,7 @@ import { step } from './progress';
 import type { Box } from './providers/types';
 import { checkoutDir, mirrorDir } from './repo';
 import { shellQuote } from './shell';
-import { configureGit, pushCreds, pushEnv, runChecked } from './session';
+import { configureGit, configureGitIdentity, resolveGitIdentity, pushCreds, pushEnv, runChecked } from './session';
 import { lookupSnapshot, staleSnapshotHint } from './snapshots';
 import { secretSourcesFor, resolveImage } from './sources';
 
@@ -146,6 +146,7 @@ export async function provisionBox({
     });
     await pushEnv({ box, env: repo ? (ctx.config.repos[repo]?.env ?? {}) : {} });
     await configureGit({ box, host });
+    await configureGitIdentity({ box, identity: await resolveGitIdentity({ override: ctx.config.gitIdentity }) });
     const install = repo ? (opts.install ?? ctx.config.repos[repo]?.install ?? null) : null;
     if (repo && snapshotId) {
       await checkoutFromSnapshot({

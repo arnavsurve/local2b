@@ -1,6 +1,7 @@
 {
   "provider": "e2b",
   "gitHost": { "type": "github" },
+  "gitIdentity": { "name": "Your Name", "email": "you@example.com" },
   "clone": { "strategy": "mirror", "depth": 50, "filter": "blob:limit=50m" },
   "secrets": [{ "type": "doppler", "project": "my-project", "config": "dev" }],
   "repos": {

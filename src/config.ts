@@ -62,6 +62,8 @@ const rawConfigSchema = z.object({
   clone: cloneSchema.default({}),
   /** Git remote host and how to authenticate to it; repos can override it. */
   gitHost: gitHostSchema.prefault({ type: 'github' }),
+  /** Git author set globally in every box. Defaults to the local `git config --global` user.name and user.email. */
+  gitIdentity: z.object({ name: z.string().min(1), email: z.string().min(1) }).nullable().default(null),
   /** `up` and `run` hint to re-bake when the repo's snapshot is older than this. */
   staleSnapshotHours: z.number().positive().default(72),
   /** Variables pushed into every sandbox, in addition to the git host token. */

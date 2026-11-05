@@ -1,5 +1,6 @@
 import { credentialHelperCommand, resolveHostToken, type ResolvedGitHost } from './git-host';
 import type { Box } from './providers/types';
+import { shellQuote } from './shell';
 import {
   loadSecrets,
   toEnvFile,
@@ -69,6 +70,32 @@ export async function pushEnv({
 
 export async function configureGit({ box, host }: { box: Box; host: ResolvedGitHost }) {
   await run({ box, cmd: credentialHelperCommand(host), cwd: '/' });
+}
+
+export type GitIdentity = { name: string; email: string };
+
+/** The config override wins; otherwise the local global git identity. `null` when either part is unset. */
+export async function resolveGitIdentity({ override }: { override: GitIdentity | null }) {
+  if (override) return override;
+  const read = async (key: string) => {
+    const proc = Bun.spawn(['git', 'config', '--global', '--get', key], {
+      stdout: 'pipe',
+      stderr: 'ignore',
+    });
+    const text = (await new Response(proc.stdout).text()).trim();
+    return (await proc.exited) === 0 && text ? text : null;
+  };
+  const [name, email] = await Promise.all([read('user.name'), read('user.email')]);
+  return name && email ? { name, email } : null;
+}
+
+export function gitIdentityCommand({ identity }: { identity: GitIdentity }) {
+  return `git config --global user.name ${shellQuote(identity.name)} && git config --global user.email ${shellQuote(identity.email)}`;
+}
+
+export async function configureGitIdentity({ box, identity }: { box: Box; identity: GitIdentity | null }) {
+  if (!identity) return;
+  await run({ box, cmd: gitIdentityCommand({ identity }), cwd: '/' });
 }
 
 export async function scrubCreds({ box }: { box: Box }) {
