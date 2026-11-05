@@ -12,6 +12,7 @@ import {
   HOME_DIR,
   IGNORE_COMMAND_LOGS,
   LIVE_STATES,
+  PREFER_IPV4_WITHOUT_IPV6_ROUTE,
   STOCK_IMAGE,
   bakeFilter,
   bakedBoxName,
@@ -238,14 +239,17 @@ export function createBoatHosts({ config, idle }: { config: Config['boat']; idle
       );
       sandboxId = created.sandbox.id;
     }
+    const { machine } = wrapSandbox({ api: client, sandbox: { id: sandboxId, labels }, idleMs });
     try {
       const { waitUntilReady } = await loadSdk();
       await waitUntilReady(client, sandboxId, { timeoutMs: READY_TIMEOUT_MS });
+      const network = await machine.exec({ cmd: PREFER_IPV4_WITHOUT_IPV6_ROUTE, cwd: HOME_DIR, onOutput: () => {} });
+      if (network !== 0) throw new Error(`network setup in the box failed (exit ${network})`);
     } catch (err) {
       await client.deleteSandbox({ sandboxId, xAsciiConfirmDelete: sandboxId }).catch(() => {});
       throw err;
     }
-    return wrapSandbox({ api: client, sandbox: { id: sandboxId, labels }, idleMs }).machine;
+    return machine;
   }
 
   async function keepBake({ machine, bake }: { machine: Machine; bake: string }) {

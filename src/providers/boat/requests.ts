@@ -262,5 +262,16 @@ export function baseImageScript({ aptPackages, imageCommands }: Pick<Config['boa
   return ['set -e', ...apt, ...imageCommands].join('\n');
 }
 
+/**
+ * Some boat machines resolve hosts to IPv6 first but have no IPv6 route out,
+ * which leaves clients without a fallback (bun install) hanging. On such a
+ * machine, prefer IPv4 addresses.
+ */
+export const PREFER_IPV4_WITHOUT_IPV6_ROUTE = [
+  'ip -6 route show default 2>/dev/null | grep -q . && exit 0',
+  "rule='precedence ::ffff:0:0/96  100'",
+  'grep -qxF "$rule" /etc/gai.conf 2>/dev/null || echo "$rule" | sudo tee -a /etc/gai.conf >/dev/null',
+].join('\n');
+
 /** Keeps boat's per-command output logs out of a bake's disk snapshot. */
 export const IGNORE_COMMAND_LOGS = `f="$HOME/.boatignore"; grep -qxF '.ascii/processes/' "$f" 2>/dev/null || echo '.ascii/processes/' >> "$f"`;
