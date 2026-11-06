@@ -1,0 +1,84 @@
+import type { Config } from '../../config';
+import { step } from '../../progress';
+import { bakeScript } from '../../toolkit/git-scripts';
+import { describeInstall, resolveInstall } from '../../toolkit/install';
+import { checkoutDir, mirrorDir, snapshotName } from '../../toolkit/layout';
+import { configureGit, pushEnv, runChecked, scrubCreds, writeCredentials } from '../../toolkit/session';
+import { machineWorkflow } from '../../toolkit/workflow';
+import type { Box, Provider } from '../types';
+import { createBoatHosts } from './machine';
+import { savedSnapshotName } from './requests';
+
+/**
+ * boat runs the toolkit's mirror workflow, with a bake kept as a stopped box
+ * that later boxes fork. A box expires through boat's own auto-stop deadline,
+ * set to the idle window at create and re-armed by a heartbeat while l2b runs
+ * a command or a shell. Boxes have snapshots off, so that stop erases them.
+ * Credentials reach the box over SSH stdin into tmpfs; shells are `ssh -t`.
+ */
+export function createBoatProvider({ config, idle }: { config: Config['boat']; idle: { ms: number } }): Provider {
+  const hosts = createBoatHosts({ config, idle });
+  const boxes = machineWorkflow({ host: hosts.boxes });
+  const withAccess = (box: Box): Box => ({
+    ...box,
+    url: ({ port }) => hosts.publicUrl({ name: box.name, port }),
+    attach: ({ cwd }) => hosts.attach({ name: box.name, cwd: cwd ?? box.workdir }),
+  });
+
+  /**
+   * Clones and installs in a bake box, then stops it so boat keeps its disk
+   * (at least 14 days). Credentials live only in tmpfs, which a stop drops;
+   * they are scrubbed first anyway. A failed bake leaves its box up for
+   * inspection until it expires.
+   */
+  const bake: Provider['bake'] = async ({ repo, credentials, image }) => {
+    const slug = `${repo.owner}/${repo.name}`;
+    const label = savedSnapshotName({ name: snapshotName(slug) });
+    const bakeName = `bake-${repo.name}`;
+    if (await hosts.boxes.exists({ name: bakeName })) {
+      throw new Error(`stale bake sandbox "${bakeName}" exists; run: l2b down ${bakeName}`);
+    }
+    step(`creating bake box "${bakeName}"`);
+    const machine = await hosts.startBake({ name: bakeName, bake: label, image: image ?? hosts.boxes.defaultImage });
+    await writeCredentials({ box: machine, credentials });
+    await pushEnv({ box: machine, env: repo.env });
+    if (credentials.git) await configureGit({ box: machine, host: credentials.git });
+    console.log(`clone strategy: ${repo.clone.strategy}`);
+    step('cloning and installing dependencies (several minutes)');
+    const dir = checkoutDir({ homeDir: machine.homeDir, repo: slug });
+    const inspect = `(sandbox ${bakeName} left up for inspection)`;
+    await runChecked({
+      box: machine,
+      cwd: machine.homeDir,
+      what: `bake ${inspect}`,
+      cmd: bakeScript({
+        remote: repo.remoteUrl,
+        mirror: repo.clone.strategy === 'mirror' ? mirrorDir({ homeDir: machine.homeDir, repo: slug }) : null,
+        checkout: dir,
+        install: null,
+        warm: null,
+        branch: repo.baseBranch,
+        depth: repo.clone.depth,
+        filter: repo.clone.filter,
+      }),
+    });
+    const resolved = repo.install === '' ? null : await resolveInstall({ box: machine, dir, configured: repo.install });
+    if (repo.install !== '') step(describeInstall({ install: resolved }));
+    const prepare = [resolved?.command ?? null, repo.warm].filter((cmd) => cmd !== null);
+    if (prepare.length > 0) {
+      await runChecked({ box: machine, cwd: dir, what: `bake install ${inspect}`, cmd: prepare.join(' && ') });
+    }
+    step('stopping the bake box so boat keeps its disk');
+    await scrubCreds({ box: machine });
+    const bakedAt = await hosts.keepBake({ machine, bake: label });
+    return { summary: `${label} (stopped box ${machine.id}; boat keeps it at least 14 days)`, bakedAt };
+  };
+
+  return {
+    ...boxes,
+    prepare: () => hosts.prepare(),
+    bake,
+    start: async (opts) => withAccess(await boxes.start(opts)),
+    connect: async (opts) => withAccess(await boxes.connect(opts)),
+  };
+}

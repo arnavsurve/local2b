@@ -31,6 +31,18 @@ export const e2bConfigSchema = z
     path: ['features'],
   });
 
+export const boatConfigSchema = z.object({
+  apiKey: valueRefSchema.default({ from: 'env', name: 'BOAT_API_KEY' }),
+  /** Machine size of every box: `small` (2 vCPU, 4 GB), `default` (4, 8), `large` (8, 16), `xlarge` (16, 32). */
+  type: z.enum(['small', 'default', 'large', 'xlarge']).default('default'),
+  /** Name of a boat environment to attach to every box. null attaches none, so a box gets no account secrets, repos or logins. */
+  environment: z.string().min(1).nullable().default(null),
+  /** Apt packages added to boat's stock image by `l2b image build`. */
+  aptPackages: z.array(z.string()).default([]),
+  /** Shell commands run as the box user by `l2b image build`, after the apt packages (sudo is available). */
+  imageCommands: z.array(z.string()).default([]),
+});
+
 const cloneFilterSchema = z
   .string()
   .regex(FILTER_PATTERN, 'must look like a git partial-clone filter, e.g. "blob:limit=50m"');
@@ -94,6 +106,7 @@ const rawConfigSchema = z.object({
     )
     .default({}),
   e2b: e2bConfigSchema.optional(),
+  boat: boatConfigSchema.optional(),
 });
 
 /**
@@ -106,6 +119,7 @@ export const configSchema = rawConfigSchema.transform((raw) => {
   return {
     ...raw,
     e2b: { ...e2b, onIdle: e2b.onIdle ?? raw.idle.action },
+    boat: raw.boat ?? boatConfigSchema.parse({}),
     /** Providers with a config block, plus the default one. */
     configuredProviders: PROVIDER_IDS.filter((id) => id === raw.provider || raw[id] !== undefined),
   };
