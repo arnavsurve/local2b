@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { BoatApi } from '@boatdev/sdk';
-import { boatCall } from './api';
+import { boatCall, warnOnError } from './api';
 import { revokeKeyCommand, sshArgs, sshTarget, writeStdinCommand } from './requests';
 
 const CONNECT_ATTEMPTS = 5;
@@ -56,7 +56,9 @@ export async function withSsh<T>({
   } finally {
     if (publicKey) {
       const command = revokeKeyCommand({ publicKey });
-      await api.command({ sandboxId, command, timeoutSeconds: 30 }).catch(() => {});
+      await api
+        .command({ sandboxId, command, timeoutSeconds: 30 })
+        .catch(warnOnError(`revoking the temporary ssh key on ${sandboxId} (its private key is already deleted locally)`));
     }
     rmSync(dir, { recursive: true, force: true });
   }

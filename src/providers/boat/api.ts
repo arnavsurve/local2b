@@ -85,3 +85,10 @@ export function isNotFound(err: unknown): boolean {
   if (isStatus(err, 404)) return true;
   return err instanceof Error && 'cause' in err && isStatus(err.cause, 404);
 }
+
+/** Best-effort cleanup must not fail the command, but it must not fail silently either. */
+export function warnOnError(what: string) {
+  return (err: unknown) => {
+    console.error(`l2b: boat: ${what} failed: ${err instanceof Error ? err.message : String(err)}`);
+  };
+}

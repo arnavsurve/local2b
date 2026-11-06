@@ -6,7 +6,7 @@ import type { Machine, MachineHost } from '../../toolkit/machine';
 import { runChecked, withEnv } from '../../toolkit/session';
 import { shellQuote } from '../../shell';
 import { UnsupportedError, type PublicUrl } from '../types';
-import { boatCall, boatClient, isNotFound, loadSdk, responseOf } from './api';
+import { boatCall, boatClient, isNotFound, loadSdk, responseOf, warnOnError } from './api';
 import {
   BASE_SNAPSHOT,
   HOME_DIR,
@@ -75,7 +75,7 @@ function wrapSandbox({ api, sandbox, idleMs }: { api: BoatApi; sandbox: Pick<San
       } finally {
         if (!finished && processId !== null) {
           const pid = processId;
-          await api.stopCommand({ sandboxId, processId: pid }).catch(() => {});
+          await api.stopCommand({ sandboxId, processId: pid }).catch(warnOnError(`stopping command ${pid} in ${sandboxId}`));
         }
       }
     });
@@ -191,10 +191,14 @@ export function createBoatHosts({ config, idle }: { config: Config['boat']; idle
    */
   async function sweepExpired() {
     const client = await api();
-    for (const sandbox of await stopped({ label: undefined })) {
-      if (!isExpiredBox({ sandbox })) continue;
-      await client.deleteSandbox({ sandboxId: sandbox.id, xAsciiConfirmDelete: sandbox.id }).catch(() => {});
-    }
+    const expired = (await stopped({ label: undefined })).filter((sandbox) => isExpiredBox({ sandbox }));
+    await Promise.all(
+      expired.map((sandbox) =>
+        client
+          .deleteSandbox({ sandboxId: sandbox.id, xAsciiConfirmDelete: sandbox.id })
+          .catch(warnOnError(`deleting expired box ${sandbox.id}`))
+      )
+    );
   }
 
   async function create({
@@ -213,7 +217,7 @@ export function createBoatHosts({ config, idle }: { config: Config['boat']; idle
     if (await findSandbox({ name })) {
       throw new Error(`sandbox "${name}" already exists: reuse it with \`l2b exec ${name} -- <cmd>\`, or \`l2b down ${name}\` first`);
     }
-    await sweepExpired().catch(() => {});
+    await sweepExpired().catch(warnOnError('sweeping expired boxes'));
     const client = await api();
     const source = image === STOCK_IMAGE ? null : await findBake({ bake: savedSnapshotName({ name: image }) });
     let sandboxId: string;
@@ -222,10 +226,10 @@ export function createBoatHosts({ config, idle }: { config: Config['boat']; idle
       const request = forkRequest({ name, image, workdir, idleMs, config, bake });
       labels = request.labels;
       const forked = await retryStarts(() =>
-        boatCall({ what: 'fork', call: () => client.fork({ sandboxId: source.id, ...request } as Parameters<BoatApi['fork']>[0]) })
+        boatCall({ what: 'fork', call: () => client.fork({ sandboxId: source.id, forkRequest: request }) })
       );
       sandboxId = forked.sandbox?.id ?? forked.id;
-      await client.update({ sandboxId, name }).catch(() => {});
+      await client.update({ sandboxId, name }).catch(warnOnError(`naming box ${sandboxId}`));
     } else {
       const request = createRequest({ name, image, workdir, idleMs, config, bake });
       labels = request.labels;
@@ -246,7 +250,9 @@ export function createBoatHosts({ config, idle }: { config: Config['boat']; idle
       const network = await machine.exec({ cmd: PREFER_IPV4_WITHOUT_IPV6_ROUTE, cwd: HOME_DIR, onOutput: () => {} });
       if (network !== 0) throw new Error(`network setup in the box failed (exit ${network})`);
     } catch (err) {
-      await client.deleteSandbox({ sandboxId, xAsciiConfirmDelete: sandboxId }).catch(() => {});
+      await client
+        .deleteSandbox({ sandboxId, xAsciiConfirmDelete: sandboxId })
+        .catch(warnOnError(`deleting box ${sandboxId} after a failed start`));
       throw err;
     }
     return machine;
