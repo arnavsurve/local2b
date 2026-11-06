@@ -66,9 +66,9 @@ test('npm globals need the node feature', async () => {
 
 test('a provider is configured when it has a block or is the default', async () => {
   writeConfig(JSON.stringify({}));
-  expect((await loadConfig()).configuredProviders).toEqual(['e2b']);
+  expect((await loadConfig()).declaredProviders).toEqual(['e2b']);
   writeConfig(JSON.stringify({ e2b: { cpuCount: 2 } }));
-  expect((await loadConfig()).configuredProviders).toEqual(['e2b']);
+  expect((await loadConfig()).declaredProviders).toEqual(['e2b']);
 });
 
 test('a repo can name its provider', async () => {

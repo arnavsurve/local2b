@@ -44,7 +44,8 @@ export async function findBoxProvider({ ctx, name }: { ctx: Context; name: strin
   const [firstSkipped] = skipped;
   if (firstSkipped && skipped.length === probes.length) throw firstSkipped.error;
   const note = skipped.length ? `; skipped, cannot authenticate: ${skipped.map((p) => p.provider.id).join(', ')}` : '';
-  throw new Error(`no sandbox named "${name}" (try: l2b ls)${note}`);
+  const where = searched.map((p) => p.id).join(', ');
+  throw new Error(`no sandbox named "${name}" on ${where} (try: l2b ls)${note}`);
 }
 
 export async function connectBox({ ctx, name }: { ctx: Context; name: string }) {

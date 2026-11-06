@@ -131,9 +131,9 @@ Several providers can be configured and used side by side. `up`, `run`, `bake` a
 
 An unknown id fails and lists the known ones. Snapshots and bake times are kept per provider, so bake a repo on each provider you use it with.
 
-Each provider has its own config block with its own API key, such as `e2b` below. A provider counts as configured when its block is present or it is the default.
+Each provider has its own config block with its own API key, such as `e2b` below. A provider counts as configured when its block is present, it is the default, or its API key resolves. With no block, that means its default variable is set, such as `E2B_API_KEY`.
 
-`exec`, `shell`, `url`, `down`, `pause` and `creds` address a box by name. With `--provider` they use that provider. Without it they look the name up on every configured provider at once. One match is used. No match gives the usual "no sandbox named" error. A name on several providers fails and asks for `--provider`. A provider with no usable API key is skipped in this lookup, but an explicit `--provider` for it fails and names the key to set.
+`exec`, `shell`, `url`, `down`, `pause` and `creds` address a box by name. With `--provider` they use that provider. Without it they look the name up on every configured provider at once. One match is used. No match gives a "no sandbox named" error that lists the providers searched. A name on several providers fails and asks for `--provider`. A provider with no usable API key is skipped in this lookup, but an explicit `--provider` for it fails and names the key to set.
 
 `ls` lists boxes from every configured provider, with the provider id in the last column. A provider that fails prints one warning on stderr and the rest still list.
 

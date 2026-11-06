@@ -120,8 +120,8 @@ export const configSchema = rawConfigSchema.transform((raw) => {
     ...raw,
     e2b: { ...e2b, onIdle: e2b.onIdle ?? raw.idle.action },
     boat: raw.boat ?? boatConfigSchema.parse({}),
-    /** Providers with a config block, plus the default one. */
-    configuredProviders: PROVIDER_IDS.filter((id) => id === raw.provider || raw[id] !== undefined),
+    /** Providers with a config block, plus the default one. A resolvable API key also counts; see `configuredProviders` in context. */
+    declaredProviders: PROVIDER_IDS.filter((id) => id === raw.provider || raw[id] !== undefined),
   };
 });
 export type Config = z.infer<typeof configSchema>;

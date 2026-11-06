@@ -4,6 +4,8 @@ import { ls } from './commands/ls';
 import { run } from './commands/run';
 import { down } from './commands/lifecycle';
 import { url } from './commands/url';
+import { configSchema } from './config';
+import { configuredProviders } from './context';
 import { findBoxProvider } from './find-box';
 import type { Provider } from './providers/types';
 import { repoSpecFor } from './repo';
@@ -123,7 +125,7 @@ test('a name on both providers is ambiguous until --provider picks one', async (
 
 test('a missing name gives the usual error', async () => {
   const { ctx } = context({});
-  await expect(findBoxProvider({ ctx, name: 'ghost' })).rejects.toThrow('no sandbox named "ghost" (try: l2b ls)');
+  await expect(findBoxProvider({ ctx, name: 'ghost' })).rejects.toThrow('no sandbox named "ghost" on a, b (try: l2b ls)');
 });
 
 test('only configured providers are searched', async () => {
@@ -146,7 +148,7 @@ test('implicit lookup skips a provider that cannot authenticate', async () => {
   await seedBox({ ctx, id: 'a', name: 'dev' });
   expect((await findBoxProvider({ ctx, name: 'dev' })).id).toBe('a');
   await expect(findBoxProvider({ ctx, name: 'ghost' })).rejects.toThrow(
-    'no sandbox named "ghost" (try: l2b ls); skipped, cannot authenticate: b'
+    'no sandbox named "ghost" on a, b (try: l2b ls); skipped, cannot authenticate: b'
   );
 });
 
@@ -197,4 +199,46 @@ test.each(['auth', 'network'] as const)('ls survives a provider failing with %s'
   expect(rows).toEqual([['one', 'running', 'id-one', 'fake-image', 'a']]);
   expect(warnings).toHaveLength(1);
   expect(warnings[0]).toContain('could not list b');
+});
+
+test('a provider without a block counts as configured when its API key resolves', async () => {
+  const config = configSchema.parse({});
+  expect(await configuredProviders({ config, env: {} })).toEqual(['e2b']);
+  expect(await configuredProviders({ config, env: { BOAT_API_KEY: 'k' } })).toEqual(['e2b', 'boat']);
+  expect(await configuredProviders({ config: configSchema.parse({ provider: 'boat' }), env: { E2B_API_KEY: 'k' } })).toEqual(['e2b', 'boat']);
+  expect(await configuredProviders({ config: configSchema.parse({ provider: 'boat' }), env: { E2B_API_KEY: '' } })).toEqual(['boat']);
+});
+
+const realIds = (configured: string[]) =>
+  context({
+    providers: [
+      { id: 'e2b', failure: null },
+      { id: 'boat', failure: null },
+    ],
+    configured,
+  });
+
+test('a provider whose key is available is searched by name and listed by ls', async () => {
+  const configured = await configuredProviders({ config: configSchema.parse({}), env: { BOAT_API_KEY: 'k' } });
+  const { ctx } = realIds(configured);
+  await seedBox({ ctx, id: 'boat', name: 'box' });
+  expect((await findBoxProvider({ ctx, name: 'box' })).id).toBe('boat');
+  const log = spyOn(console, 'log').mockImplementation(() => {});
+  await ls({ ctx, args: [] });
+  const rows = log.mock.calls.map((call) => String(call[0]).split('\t'));
+  log.mockRestore();
+  expect(rows.map((r) => [r[0], r[4]])).toEqual([['box', 'boat']]);
+});
+
+test('a provider with neither a block nor a key is not searched, but --provider still reaches it', async () => {
+  const configured = await configuredProviders({ config: configSchema.parse({}), env: {} });
+  const { ctx } = realIds(configured);
+  await seedBox({ ctx, id: 'boat', name: 'box' });
+  await expect(findBoxProvider({ ctx, name: 'box' })).rejects.toThrow('no sandbox named "box" on e2b (try: l2b ls)');
+  const log = spyOn(console, 'log').mockImplementation(() => {});
+  await ls({ ctx, args: [] });
+  const rows = log.mock.calls.length;
+  log.mockRestore();
+  expect(rows).toBe(0);
+  expect((await findBoxProvider({ ctx: { ...ctx, flag: 'boat' }, name: 'box' })).id).toBe('boat');
 });

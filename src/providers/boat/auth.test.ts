@@ -14,7 +14,7 @@ test('a missing API key surfaces as an auth error naming the variable to set', a
 
 test('the boat block defaults to BOAT_API_KEY and counts as configured once present', () => {
   expect(configSchema.parse({}).boat.apiKey).toEqual({ from: 'env', name: 'BOAT_API_KEY' });
-  expect(configSchema.parse({}).configuredProviders).toEqual(['e2b']);
-  expect(configSchema.parse({ boat: {} }).configuredProviders).toEqual(['e2b', 'boat']);
-  expect(configSchema.parse({ provider: 'boat' }).configuredProviders).toEqual(['boat']);
+  expect(configSchema.parse({}).declaredProviders).toEqual(['e2b']);
+  expect(configSchema.parse({ boat: {} }).declaredProviders).toEqual(['e2b', 'boat']);
+  expect(configSchema.parse({ provider: 'boat' }).declaredProviders).toEqual(['boat']);
 });

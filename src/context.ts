@@ -1,5 +1,6 @@
 import { loadConfig, type Config } from './config';
-import { createProvider, PROVIDER_IDS } from './providers';
+import { createProvider, PROVIDER_IDS, type ProviderId } from './providers';
+import { resolveValue } from './secrets';
 import { resolveProviderId } from './providers/select';
 import type { Provider } from './providers/types';
 
@@ -50,12 +51,36 @@ export function selectForRepo({ ctx, repo }: { ctx: Context; repo: string | null
   return { ...ctx, provider: providerFor({ providers: ctx.providers, id }) };
 }
 
+/**
+ * Providers searched by name and listed by `ls`: those with a config block,
+ * the default, and any whose API key reference resolves in `env`. The key
+ * itself is discarded.
+ */
+export async function configuredProviders({
+  config,
+  env,
+}: {
+  config: Config;
+  env: Record<string, string | undefined>;
+}): Promise<ProviderId[]> {
+  const keyed = await Promise.all(
+    PROVIDER_IDS.map(async (id) => {
+      if (config.declaredProviders.includes(id)) return true;
+      return resolveValue(config[id].apiKey, { env }).then(
+        () => true,
+        () => false
+      );
+    })
+  );
+  return PROVIDER_IDS.filter((_, i) => keyed[i]);
+}
+
 export async function createContext({ flag }: { flag: string | null }) {
   const config = await loadConfig();
   return buildContext({
     config,
     providers: PROVIDER_IDS.map((id) => createProvider({ id, config })),
-    configured: config.configuredProviders,
+    configured: await configuredProviders({ config, env: process.env }),
     defaultId: config.provider,
     flag,
     env: process.env.L2B_PROVIDER || null,

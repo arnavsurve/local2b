@@ -216,11 +216,11 @@ export async function loadSecrets(source: SecretSource) {
 }
 
 /** Tries each ref in order; the error lists every failure, which never carries values. */
-async function resolveFirstOf(refs: ValueRef[]) {
+async function resolveFirstOf({ refs, env }: { refs: ValueRef[]; env: Env }) {
   const failures: string[] = [];
   for (const ref of refs) {
     try {
-      return await resolveValue(ref);
+      return await resolveValue(ref, { env });
     } catch (error) {
       failures.push(error instanceof Error ? error.message : 'unknown error');
     }
@@ -228,10 +228,13 @@ async function resolveFirstOf(refs: ValueRef[]) {
   throw new Error(`no value from any of ${refs.length} sources: ${failures.join('; ')}`);
 }
 
-export async function resolveValue(ref: ValueRef): Promise<string> {
+type Env = Record<string, string | undefined>;
+
+/** `env` is where `env` refs read from; it defaults to the process environment. */
+export async function resolveValue(ref: ValueRef, { env = process.env }: { env?: Env } = {}): Promise<string> {
   switch (ref.from) {
     case 'env': {
-      const value = process.env[ref.name];
+      const value = env[ref.name];
       if (!value) throw new Error(`env var ${ref.name} is not set`);
       return value;
     }
@@ -252,7 +255,7 @@ export async function resolveValue(ref: ValueRef): Promise<string> {
       return value;
     }
     case 'firstOf':
-      return resolveFirstOf(ref.refs);
+      return resolveFirstOf({ refs: ref.refs, env });
     default: {
       const unreachable: never = ref;
       throw new Error(`unknown value ref: ${JSON.stringify(unreachable)}`);
