@@ -63,6 +63,8 @@ Boxes are disposable. Commit and push a branch from inside the box when you are 
 
     l2b exec <name> -- git push -u origin <branch>
 
+Boxes already commit as you: `up` and `run` copy your local `git config --global` name and email (or `gitIdentity` from the l2b config). Never pass `-c user.name`/`-c user.email` or set a placeholder identity; commits from unknown emails block deploys.
+
 Anything not pushed is lost when the box expires. Do not try to sync files back to the local machine; clone the pushed branch if you need it locally.
 
 ## Cleanup is automatic
