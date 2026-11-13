@@ -50,3 +50,12 @@ test('unknown command fails and lists commands', async () => {
   expect(res.stderr).toContain("unknown command 'nope'");
   expect(res.stderr).toContain(COMMAND_HELP.exec.usage);
 });
+
+test('--version and -v print the package version', async () => {
+  const { version } = await Bun.file(resolve(import.meta.dir, '../package.json')).json();
+  for (const flag of ['--version', '-v']) {
+    const res = await l2b(flag);
+    expect(res.code).toBe(0);
+    expect(res.stdout).toBe(`${version}\n`);
+  }
+});

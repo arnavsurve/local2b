@@ -132,6 +132,7 @@ export function rootHelp() {
     ...rows,
     '',
     '  l2b <command> --help shows a command\'s flags',
+    '  l2b --version prints the version',
     '  --provider <id> (any command) picks the provider; also L2B_PROVIDER and repos.<o/r>.provider in the config',
     '',
   ].join('\n');
