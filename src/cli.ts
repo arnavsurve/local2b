@@ -17,6 +17,7 @@ import { createContext, type Command } from './context';
 import { commandHelp, isCommandName, rootHelp, wantsHelp, type CommandName } from './help';
 import { extractProviderFlag } from './providers/select';
 import { CommandFailedError } from './providers/types';
+import { VERSION } from './version';
 
 const commands: Record<CommandName, Command> = {
   run,
@@ -41,6 +42,10 @@ async function main() {
   const [name, ...args] = argv;
   if (!name || name === '--help' || name === '-h') {
     console.log(rootHelp());
+    return;
+  }
+  if (name === '--version' || name === '-v') {
+    console.log(VERSION);
     return;
   }
   if (!isCommandName(name)) {
