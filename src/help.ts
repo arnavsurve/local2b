@@ -7,8 +7,8 @@ type CommandHelp = {
 };
 
 const SHARED_FLAGS: [string, string][] = [
-  ['--repo owner/repo', 'repository to check out'],
-  ['--branch b', 'branch to check out'],
+  ['--repo owner/repo', 'repository to check out (default: origin of the checkout in cwd)'],
+  ['--branch b', "branch to check out (default: that checkout's current branch)"],
   ['--full', 'full clone instead of the partial mirror'],
   ['--doppler project/config', 'doppler secrets to load into the box'],
   ['--image ref', 'base image override'],
@@ -32,7 +32,7 @@ export const COMMAND_HELP = {
     flags: SHARED_FLAGS,
   },
   bake: {
-    usage: 'l2b bake <owner/repo> [--if-older-than 12h]',
+    usage: 'l2b bake [owner/repo] [--if-older-than 12h]',
     summary: 'build the per-repo snapshot (bare mirror + warm install)',
     flags: [
       ['--if-older-than 12h', 'skip when the existing snapshot is newer'],

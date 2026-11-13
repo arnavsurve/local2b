@@ -18,6 +18,8 @@ export type Context = {
   flag: string | null;
   /** `L2B_PROVIDER`, when set. */
   env: string | null;
+  /** Where `.l2b.json` and the local checkout are looked up from. */
+  cwd: string;
 };
 
 function providerFor({
@@ -84,6 +86,7 @@ export async function createContext({ flag }: { flag: string | null }) {
     defaultId: config.provider,
     flag,
     env: process.env.L2B_PROVIDER || null,
+    cwd: process.cwd(),
   });
 }
 

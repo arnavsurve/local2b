@@ -48,7 +48,7 @@ const cloneFilterSchema = z
   .regex(FILTER_PATTERN, 'must look like a git partial-clone filter, e.g. "blob:limit=50m"');
 
 /** Every field is optional so a repo's block overrides only what it sets. */
-const cloneSchema = z.object({
+export const cloneSchema = z.object({
   /** `mirror`: bare mirror plus a worktree checkout. `plain`: an ordinary clone. */
   strategy: z.enum(['mirror', 'plain']).optional(),
   /** Commits of history to keep; `null` for full history. */
@@ -63,6 +63,24 @@ const idleSchema = z.object({
   minutes: z.number().positive().default(15),
   /** Deprecated alias for `e2b.onIdle`, kept so existing configs still parse. */
   action: z.enum(['kill', 'pause']).default('kill'),
+});
+
+/** Per-repo settings in the user config; a project's `.l2b.json` overrides them. */
+export const repoConfigSchema = z.object({
+  /** Provider used for this repo, ahead of the top-level `provider`. */
+  provider: z.string().nullable().default(null),
+  /** Overrides the global `clone` settings field by field. */
+  clone: cloneSchema.default({}),
+  /** Overrides the global `gitHost` for this repo. */
+  gitHost: gitHostSchema.nullable().default(null),
+  /** Branch the snapshot is baked from (the one you mostly work off), when it is not the repo's default branch. */
+  baseBranch: z.string().nullable().default(null),
+  /** Runs in the checkout on every `up`; keep it fast and incremental. */
+  install: z.string().nullable().default(null),
+  /** Extra one-time work at bake only (codegen, builds); its output ships in the snapshot. */
+  warm: z.string().nullable().default(null),
+  /** Plain variables set in every box for this repo, e.g. to switch off a wrapper that expects a local login. */
+  env: z.record(z.string(), z.string()).default({}),
 });
 
 const rawConfigSchema = z.object({
@@ -84,27 +102,7 @@ const rawConfigSchema = z.object({
   /** Variables pushed into every sandbox, in addition to the git host token. */
   secrets: z.array(secretSourceSchema).default([]),
   /** Per-repo settings, keyed by `owner/name`. */
-  repos: z
-    .record(
-      z.string(),
-      z.object({
-        /** Provider used for this repo, ahead of the top-level `provider`. */
-        provider: z.string().nullable().default(null),
-        /** Overrides the global `clone` settings field by field. */
-        clone: cloneSchema.default({}),
-        /** Overrides the global `gitHost` for this repo. */
-        gitHost: gitHostSchema.nullable().default(null),
-        /** Branch the snapshot is baked from (the one you mostly work off), when it is not the repo's default branch. */
-        baseBranch: z.string().nullable().default(null),
-        /** Runs in the checkout on every `up`; keep it fast and incremental. */
-        install: z.string().nullable().default(null),
-        /** Extra one-time work at bake only (codegen, builds); its output ships in the snapshot. */
-        warm: z.string().nullable().default(null),
-        /** Plain variables set in every box for this repo, e.g. to switch off a wrapper that expects a local login. */
-        env: z.record(z.string(), z.string()).default({}),
-      })
-    )
-    .default({}),
+  repos: z.record(z.string(), repoConfigSchema).default({}),
   e2b: e2bConfigSchema.optional(),
   boat: boatConfigSchema.optional(),
 });
