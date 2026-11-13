@@ -1,5 +1,6 @@
 # Contributing notes
 
+- l2b's only users are coding agents. Never add a step, prompt or message that needs a human. Prefer automatic behaviour with one clear stderr line about what happened. Every hint and error tells the agent exactly what to do next; only missing credentials may say the user has to act.
 - Keep the CLI, README, skill, and error messages provider-neutral. Provider names belong only in `src/providers/<id>/`, the provider's config block, and the provider's own README section.
 - Core code talks to `Provider` and `Box` from `src/providers/types.ts`. Do not import a provider's SDK or helpers from outside its directory (the provider registry in `src/providers/index.ts` and the config schema are the only places that name providers).
 - The boundary is workflow-level. Core states what it wants and checks results; it does not know how a provider gets there. Do not add capability flags or core rules about pause, terminals, lifetimes, snapshots or images. That policy lives in the adapter and its config block.

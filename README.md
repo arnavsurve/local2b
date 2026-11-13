@@ -3,18 +3,21 @@
 <img width="3888" height="1784" alt="sebastian-schuster-dkKgXnqFkjE-unsplash" src="https://github.com/user-attachments/assets/b3979a53-dc14-4f96-ab0e-8833d9137ccb" />
 
 
-Run heavy repo work on remote sandboxes instead of your laptop: typechecks, test suites, installs, dev servers. For coding agents and people.
+l2b runs heavy repo work on remote sandboxes: typechecks, test suites, installs, builds, dev servers. Its only users are coding agents. An agent drives it through the skill in `skills/l2b/SKILL.md`; a person sets up provider credentials once and is not involved after that.
 
     l2b run --repo my-org/my-repo --branch feature/x -- yarn test
 
-That starts a box, checks out the branch, runs the project's setup and install from `.l2b.json`, runs the command, destroys the box, and hands you the exit code. Inside a checkout, `--repo` and `--branch` default to that checkout's.
+That starts a box, checks out the branch, runs the project's setup and install from `.l2b.json`, runs the command, destroys the box, and returns the exit code. Inside a checkout, `--repo` and `--branch` default to that checkout's.
+
+This README is for maintainers and for agents that need more than the skill: how l2b works, its configuration, and how to add a provider.
 
 ## What it does
 
-- Pushes your `gh` token and configured secrets to the box's tmpfs on each call. Images and snapshots never contain them.
-- Bakes a repo once, so a box starts as a branch switch plus an incremental install.
+- Pushes the git host token and configured secrets to the box's tmpfs on each call. Images and bakes never contain them.
+- Builds the provider's base image on first use and again when its settings change.
+- Bakes each repo in the background, so later boxes start as a branch switch plus an incremental install. A bake is made again in the background when it gets old or `.l2b.json` changes.
 - Destroys the box after `run`, and expires idle boxes on the provider's side.
-- Ships an agent skill. Commands default to the repo checkout, and `run` ends with `command exited <code>`.
+- Says on stderr what it did and, on failure, what to do next.
 
 ## Install
 
@@ -34,17 +37,23 @@ To uninstall, delete the binary and the skill directories:
 
 From a checkout, `bun install` then `bun src/cli.ts install` links `~/.local/bin/l2b` to the checkout and links the skill. A checkout updates with `git pull`.
 
-## Quick start
+## Setup
 
-You need an API key for your provider and `gh` (or `GH_TOKEN`). A secret source is optional.
+A person does this once per machine, usually from their dotfiles or installer. Nothing else needs a person.
 
-    mkdir -p ~/.config/l2b
-    curl -fsSL https://raw.githubusercontent.com/arnavsurve/local2b/main/config.example.json -o ~/.config/l2b/config.json
-    l2b image build             # once
-    cd ~/src/my-repo
-    l2b init                    # once per repo; then set setup and install in .l2b.json
-    l2b bake                    # once per repo
-    l2b run -- yarn test
+- Install l2b, as above.
+- Give l2b a provider API key, and a git host token: `gh` logged in, or `GH_TOKEN` set.
+- Optionally, list secret sources for every box.
+
+The user config at `~/.config/l2b/config.json` (or `$L2B_CONFIG`) holds only these. `config.example.json` is a starting point:
+
+    {
+      "provider": "e2b",
+      "e2b": { "apiKey": { "from": "env", "name": "E2B_API_KEY" } },
+      "secrets": []
+    }
+
+Everything about a repo lives in its `.l2b.json`, which agents write. The base image and the bakes are made automatically.
 
 ## Commands
 
@@ -59,16 +68,16 @@ You need an API key for your provider and `gh` (or `GH_TOKEN`). A secret source 
 - `down <name>`, `pause <name>`, `ls`: lifecycle.
 - `url <name> <port>`: public URL for a port.
 - `creds <name> [--repo o/r]`: re-push credentials.
-- `bake [o/r] [--install cmd] [--warm cmd] [--branch b] [--if-older-than 12h]`: build the repo snapshot.
+- `bake [o/r] [--install cmd] [--warm cmd] [--branch b] [--if-older-than 12h]`: bake the repo now. `up` and `run` already bake in the background when needed. Fails while another bake of the repo runs. `--if-older-than` skips the bake while the current one is newer and made with the same settings.
 - `bake --delete [o/r]`: delete the repo's bake on the selected provider and l2b's local records of it. Later boxes start without a bake.
 - `bakes`: list bakes on every configured provider, or on `--provider`'s: repo, provider, id and age. A bake l2b has no local record of shows its own name and no age.
-- `image build`: build the base image.
+- `image build`: build the base image now. l2b builds it on its own when it is missing or its settings changed.
 - `update`: replace the binary with the latest release and refresh the skill.
 - `install`: install the agent skill into `~/.agents/skills/l2b` and `~/.claude/skills/l2b`. From a checkout it links the skill and puts `l2b` on PATH; a released binary writes the skill files.
 
 `run`, `up`, `bake` and `creds` take the repo from the checkout in the current directory when `--repo` is not given. See Repo and branch from the checkout.
 
-Use `run` for one-off work. Use `up`, `exec` and `down` when several commands need the same checkout, or you want a dev server behind a `url`.
+Use `run` for one-off work. Use `up`, `exec` and `down` when several commands need the same checkout, or for a dev server behind a `url`.
 
 Detached jobs suit long commands such as full test suites, which would otherwise hit a tool-call timeout. Output and exit status are kept in `~/.l2b-jobs/<job>/` in the box (`log`, `status`). A job does not hold off box expiry by itself, so run `logs` or `jobs` now and then while it runs.
 
@@ -76,13 +85,45 @@ Detached jobs suit long commands such as full test suites, which would otherwise
 
 Each provider runs this workflow with its own primitives. The description below is the shared toolkit's snapshot-and-mirror workflow, which e2b uses.
 
-An **image** holds tooling only: git, gh, a language runtime and whatever else you configure. `l2b image build` makes it once. A **snapshot** is a per-repo disk capture on top of that image, made by `l2b bake`: whatever `setup` installed, a shallow mirror, a checkout, installed dependencies, and any codegen from `warm`. A **box** is a sandbox started from the snapshot. `up` pushes credentials, switches the checkout to your branch, and runs `install` incrementally. Without a snapshot, `up` runs `setup`, clones, then runs `install`.
+An **image** holds tooling only: git, gh, a language runtime and whatever the provider config adds. A **bake** is a per-repo disk capture on top of that image: whatever `setup` installed, a shallow mirror, a checkout, installed dependencies, and any codegen from `warm`. A **box** is a sandbox started from the bake. `up` pushes credentials, switches the checkout to the branch, and runs `install` incrementally. Without a bake, `up` runs `setup`, clones, then runs `install`.
 
 Boxes expire 15 minutes after the last l2b activity, with no local process needed; each provider documents how it guarantees that. Push a branch to keep work.
 
+### Base image
+
+Before a start without a bake, and before a bake, the provider makes sure its base image exists and matches the image settings. If it is missing, or was built from other settings, l2b builds it first and prints `preparing the base image <name> (first use|image settings changed; several minutes, once)`. A hash of what the image is built from is kept in `$XDG_STATE_HOME/l2b/images.json`. One l2b process builds at a time; others print `waiting for another l2b process` and wait. An image already on the provider that this machine has no record of is used as it is and recorded, so a new machine does not rebuild a shared image. A bake made on an older base image counts as out of date.
+
+### Background bakes
+
+`up` and `run` check the repo's bake before starting the box:
+
+| Bake | This box starts | Background bake |
+| --- | --- | --- |
+| None, or of unknown age | from the bake if the provider has one, else without | yes |
+| Older than `staleSnapshotHours` (72) | from it | yes |
+| Made with other `install`, `env`, `clone` or `baseBranch` | from it, then applies the change | yes |
+| Made with other `setup` or `warm` | without it | yes |
+| Made before l2b recorded its settings | from it | yes |
+| Current | from it | no |
+
+The background bake is a detached `l2b bake` that outlives the command that started it. Its output goes to `$XDG_STATE_HOME/l2b/logs/bake-<provider>-<owner>-<name>.log`. A lock in `$XDG_STATE_HOME/l2b/locks/` allows one bake per provider and repo, so concurrent agents start one; a lock whose process has died is taken over. Each case prints one line on stderr that names the log. `--full` skips all of this.
+
+A bake replaces the previous one only once it is complete, so boxes keep starting from the old bake while it runs and after it fails. A bake that failed because a repo command failed (`setup`, `install`, `warm`, the clone) is not retried with the same settings for an hour; starts say so and name the log. Changing `.l2b.json` retries it at once. Any other failure is retried on the next start. A bake replaces the box an earlier failed bake of the repo left up.
+
+### Local records
+
+l2b keeps these under `$XDG_STATE_HOME/l2b/` (default `~/.local/state/l2b/`):
+
+- `bakes.json`: when each repo was baked. A bake made on another machine has no known age.
+- `bake-configs.json`: a hash of the settings each bake used (`setup`, `install`, `warm`, `baseBranch`, `clone`, `env`).
+- `bake-failures.json`: the last bake per repo that failed on a repo command.
+- `images.json`: the recipe hash of each base image.
+- `boxes.json`: the boxes l2b started, with their repo, branch and last activity. `down` removes an entry, and entries unused for three days are dropped.
+- `locks/` and `logs/`: bake and image locks, and background bake logs.
+
 ## Project config
 
-A project describes its environment in `.l2b.json`. l2b uses the nearest one, looking in the current directory and then each parent up to the filesystem root. Commit it to share it, or keep it untracked in a parent directory to cover every checkout below it.
+A project describes its environment in `.l2b.json`. Agents write and maintain it. l2b uses the nearest one, looking in the current directory and then each parent up to the filesystem root. Commit it to share it, or keep it untracked in a parent directory to cover every checkout below it.
 
 `l2b init` writes a starter file in the current directory with every key. In a checkout it fills in `repo` and `baseBranch`. It does not overwrite an existing file.
 
@@ -105,10 +146,10 @@ A project describes its environment in `.l2b.json`. l2b uses the nearest one, lo
 | Key | Meaning |
 | --- | --- |
 | `repo` | `owner/name` the file is for. A command for another repo fails while this file is the nearest. Outside a checkout it supplies `--repo` |
-| `setup` | Shell commands that install the toolchain. They run in order as the box user (sudo is available) in its home, before the clone: at bake, and on a start without a snapshot. A start from a snapshot keeps their result |
+| `setup` | Shell commands that install the toolchain. They run in order as the box user (sudo is available) in its home, before the clone: at bake, and on a start without a bake. A start from a bake keeps their result |
 | `install` | Runs in the checkout at bake and on every start. Keep it incremental |
 | `warm` | Runs once at bake, after `install` |
-| `baseBranch` | Branch the snapshot is baked from |
+| `baseBranch` | Branch the bake is made from |
 | `env` | Plain, non-secret variables set in every box |
 | `secrets` | Secret sources added to the user config's. See Secret sources |
 | `clone` | `strategy`, `depth` and `filter`, as in Config |
@@ -121,9 +162,9 @@ Settings resolve in this order: command-line flags, the nearest `.l2b.json`, `re
 
 Each command runs in a non-login shell, so put tools on the default `PATH`, for example by linking them into `/usr/local/bin`.
 
-With no `.l2b.json` and no `install` in `repos.<o/r>`, nothing is set up or installed, and `up`, `run` and `bake` say so on stderr. A command in `run` or `exec` that exits 127 (command not found) prints a pointer to `setup`.
+With no `.l2b.json` and no `install` in `repos.<o/r>`, nothing is set up or installed, and `up`, `run` and `bake` say so on stderr and point at `l2b init`. A command in `run` or `exec` that exits 127 (command not found) prints a pointer to `setup`.
 
-`secrets` and a `generic` `gitHost` can name commands, which l2b runs on your machine. Use l2b only under `.l2b.json` files you trust.
+`secrets` and a `generic` `gitHost` can name commands, which l2b runs on the local machine without asking, as it runs `setup` and `install` in the box.
 
 ### Repo and branch from the checkout
 
@@ -133,7 +174,7 @@ Without `--branch`, `run` and `up` use the checkout's current branch. The box fe
 
 ## Credentials
 
-Nothing secret goes into an image or snapshot. At call time, l2b resolves a git host token and your configured secrets locally and writes them to `/dev/shm/l2b.env` in the box (tmpfs, mode 600). Every `exec` sources that file. Bake deletes it before snapshotting, and snapshots are filesystem-only.
+Nothing secret goes into an image or bake. At call time, l2b resolves a git host token and the configured secrets locally and writes them to `/dev/shm/l2b.env` in the box (tmpfs, mode 600). Every `exec` sources that file. Bake deletes it before snapshotting, and snapshots are filesystem-only.
 
 Anything the box runs can read those secrets, and a paused box keeps them in memory. Prefer a scoped `GH_TOKEN` over your full `gh` login.
 
@@ -167,7 +208,7 @@ A command reference trims one trailing newline and fails on empty output. Tools 
 
 ## Config
 
-`$L2B_CONFIG`, else `~/.config/l2b/config.json`. Every key has a default. See `config.example.json`. `repos.<o/r>` is the fallback for repos without a `.l2b.json`; see Project config.
+`$L2B_CONFIG`, else `~/.config/l2b/config.json`. Every key has a default. In normal use it holds only provider credentials and secret sources (see Setup); repo settings belong in `.l2b.json`. The other keys exist for machine-wide defaults, and `repos.<o/r>` is the fallback for repos without a `.l2b.json`.
 
 | Key | Default | Meaning |
 | --- | --- | --- |
@@ -182,17 +223,17 @@ A command reference trims one trailing newline and fails on empty output. Tools 
 | `clone.depth` | `50` | Commits of history kept; `null` for full history |
 | `clone.filter` | `"blob:limit=50m"` | Git partial-clone filter, e.g. `blob:none`; `null` for none |
 | `cloneDepth` | none | Kept for compatibility; the global default for `clone.depth`. Prefer `clone.depth` |
-| `staleSnapshotHours` | `72` | `up` and `run` hint to re-bake past this age |
-| `repos.<o/r>.baseBranch` | repo default | Branch the snapshot is baked from |
+| `staleSnapshotHours` | `72` | Age past which `up` and `run` re-bake in the background |
+| `repos.<o/r>.baseBranch` | repo default | Branch the bake is made from |
 | `repos.<o/r>.setup` | `[]` | Toolchain commands; see `setup` in Project config |
 | `repos.<o/r>.install` | none | Runs on every `up` and at bake. Keep it incremental. `""` runs nothing |
-| `repos.<o/r>.warm` | none | Runs at bake only (codegen, builds). Output ships in the snapshot |
+| `repos.<o/r>.warm` | none | Runs at bake only (codegen, builds). Output ships in the bake |
 | `repos.<o/r>.env` | `{}` | Plain, non-secret variables set in every box for this repo |
 | `repos.<o/r>.gitHost` | global | Per-repo override |
 | `repos.<o/r>.provider` | global `provider` | Provider used for this repo |
 | `repos.<o/r>.clone` | global | Per-repo override of `strategy`, `depth` and `filter`. Unset fields inherit |
 
-`setup`, `baseBranch`, `warm` and `clone` apply on the next `l2b bake`, which prints the strategy it used. `up` follows what the snapshot contains: it uses a baked mirror if one exists and otherwise fetches in place, so changing the strategy never breaks an existing snapshot. `--full` on `up` or `run` clones without a snapshot at full depth and keeps the filter.
+A change to `setup`, `baseBranch`, `warm` or `clone` makes `up` and `run` bake again in the background (see Background bakes); the bake prints the clone strategy it used. `up` follows what the bake contains: it uses a baked mirror if one exists and otherwise fetches in place, so changing the strategy never breaks an existing bake. `--full` on `up` or `run` clones without a bake at full depth and keeps the filter.
 
 Use `plain` for small repos. A mirror pays off when the repo is large and boxes switch branches often; for a small repo it adds a second copy and nothing else.
 
@@ -205,7 +246,7 @@ Several providers can be configured and used side by side. `up`, `run`, `bake` a
 3. `repos.<o/r>.provider`
 4. the top-level `provider`
 
-An unknown id fails and lists the known ones. Snapshots and bake times are kept per provider, so bake a repo on each provider you use it with.
+An unknown id fails and lists the known ones. Bakes and bake times are kept per provider; each provider gets its own background bake.
 
 Each provider has its own config block with its own API key, such as `e2b` below. A provider counts as configured when its block is present, it is the default, or its API key resolves. With no block, that means its default variable is set, such as `E2B_API_KEY`.
 
@@ -215,13 +256,14 @@ Each provider has its own config block with its own API key, such as `e2b` below
 
 ### e2b
 
-Set `E2B_API_KEY`, or point `e2b.apiKey` at a value reference. Image settings apply on the next `l2b image build`.
+Set `E2B_API_KEY`, or point `e2b.apiKey` at a value reference. The base image is an e2b template named by `e2b.template`. It is built on first use and rebuilt when the image settings below change; a template's build counts once it has a `default` tag.
 
 A box expires through e2b's server-side timeout. l2b sets it to the idle window at creation and re-arms it with a heartbeat while a command or shell runs.
 
 | Key | Default | Meaning |
 | --- | --- | --- |
 | `e2b.apiKey` | env `E2B_API_KEY` | Value reference: `env`, `file`, `command` or `doppler` |
+| `e2b.template` | `"l2b-dev"` | Name of the base image template |
 | `e2b.onIdle` | `idle.action` | At the end of the idle window: `kill` discards the box; `pause` keeps disk and memory (and secrets) |
 | `e2b.cpuCount`, `e2b.memoryMB` | `4`, `8192` | Box size at image build |
 | `e2b.features` | all | Image tooling: `node`, `gh`, `doppler`, `docker`, `postgres`, `redis`, `ripgrep`, `tmux`. `[]` for a lean image |
@@ -233,7 +275,7 @@ A box expires through e2b's server-side timeout. l2b sets it to the idle window 
 
 Set `BOAT_API_KEY`, or point `boat.apiKey` at a value reference. `ssh` and `ssh-keygen` must be on your PATH.
 
-Boxes run boat's stock Ubuntu image, which has git, gh, node, bun and docker. A bake is a stopped boat box: `l2b bake` clones and installs in a box, then stops it, and boat keeps its disk. Boxes started from the bake are forks of it. boat keeps a stopped box's disk for at least 14 days and may delete it after that; once it is gone, `up` and `run` clone from scratch until the next bake. A new bake replaces the old one. `l2b image build` makes a `l2b-base` bake with the packages and commands in the `boat` block, and boxes and bakes start from it; with neither set it builds nothing.
+Boxes run boat's stock Ubuntu image, which has git, gh, node, bun and docker. A bake is a stopped boat box: `l2b bake` clones and installs in a box, then stops it, and boat keeps its disk. Boxes started from the bake are forks of it. boat keeps a stopped box's disk for at least 14 days and may delete it after that; once it is gone, `up` and `run` start without it and bake again in the background. A new bake replaces the old one. With packages or commands in the `boat` block, l2b keeps a `l2b-base` bake built from them, and boxes and bakes start from it; it is built on first use and again when those settings change. With neither set, nothing is built.
 
 A box expires through boat's auto-stop deadline. l2b sets it to the idle window at creation and re-arms it while a command or shell runs. Boxes are created with snapshots off, so the stop at the deadline erases the box and its disk. A forked box may keep its disk when it stops; l2b deletes stopped boxes on the next `up` or `run`.
 
@@ -246,8 +288,8 @@ Credentials go to the box over SSH stdin into `/dev/shm/l2b.env`. l2b authorizes
 | `boat.apiKey` | env `BOAT_API_KEY` | Value reference: `env`, `file`, `command` or `doppler` |
 | `boat.type` | `"default"` | Box size: `small`, `default`, `large`, `xlarge` |
 | `boat.environment` | `null` | A boat environment to attach to every box. `null` attaches none, so boxes get no account secrets, repos or logins |
-| `boat.aptPackages` | `[]` | Apt packages `l2b image build` adds to the stock image |
-| `boat.imageCommands` | `[]` | Shell commands run as the box user at image build (sudo is available) |
+| `boat.aptPackages` | `[]` | Apt packages the `l2b-base` image adds to the stock image |
+| `boat.imageCommands` | `[]` | Shell commands run as the box user when `l2b-base` is built (sudo is available) |
 
 ## Git hosts
 
@@ -262,20 +304,6 @@ GitHub is the default. `baseUrl` points a preset at GitHub Enterprise Server or 
 
     { "type": "generic", "baseUrl": "https://bitbucket.org", "username": "x-token-auth",
       "token": { "from": "env", "name": "BITBUCKET_TOKEN" } }
-
-## Keeping snapshots fresh
-
-A stale snapshot makes `up` slower. `bake --if-older-than` skips the work when the snapshot is recent, so a scheduled job can call it often:
-
-    0 3 * * * cd ~/src/my-repo && l2b bake --if-older-than 20h
-
-Run it from the checkout, so the bake sees the same `.l2b.json` as your other commands.
-
-l2b records bake times in `$XDG_STATE_HOME/l2b/bakes.json`. A snapshot baked elsewhere has no known age.
-
-`bake` also records a hash of the settings it used (`setup`, `install`, `warm`, `baseBranch`, `clone`, `env`) in `$XDG_STATE_HOME/l2b/bake-configs.json`. When they differ, `up` and `run` print `project config changed since the bake`, and `bake --if-older-than` bakes again even if the snapshot is recent.
-
-l2b records the boxes it starts, with their repo, branch and last activity, in `$XDG_STATE_HOME/l2b/boxes.json`. `down` removes an entry, and entries unused for three days are dropped.
 
 ## Adding a provider
 
