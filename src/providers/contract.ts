@@ -361,6 +361,33 @@ export function describeProviderContract({
       }
     }, timeoutMs);
 
+    test('a failed re-bake leaves the previous bake in use and does not block the next bake', async () => {
+      const warmed = (warm: string): RepoSpec => ({ ...repo(), warm });
+      const first = await subject.provider.bake({ repo: warmed(`touch ${WARM_MARKER}`), credentials: credentials({ value: canary }), image: null });
+      await expect(
+        subject.provider.bake({ repo: warmed('exit 7'), credentials: credentials({ value: canary }), image: null })
+      ).rejects.toThrow();
+      expect((await subject.provider.bakedAt({ repo: repo() }))?.getTime()).toBe(first.bakedAt.getTime());
+      const box = await subject.provider.start({
+        name: uniqueName('contract'),
+        repo: repo(),
+        branch: subject.branch,
+        source: 'bake',
+        image: null,
+        idle: subject.idle,
+        credentials: credentials({ value: canary }),
+        gitIdentity: null,
+      });
+      try {
+        expect((await capture({ box, cmd: `test -e ${WARM_MARKER}`, cwd: null })).exitCode).toBe(0);
+      } finally {
+        await box.destroy();
+      }
+      const next = await subject.provider.bake({ repo: warmed('true'), credentials: credentials({ value: canary }), image: null });
+      expect(next.bakedAt.getTime()).toBeGreaterThanOrEqual(first.bakedAt.getTime());
+      await subject.provider.deleteBake({ repo: repo() });
+    }, timeoutMs);
+
     const runOnce = ({ cmd, onOutput }: { cmd: string; onOutput: (o: ExecOutput) => void }) => {
       const boxName = uniqueName('contract-run');
       const run = runOnceOn({

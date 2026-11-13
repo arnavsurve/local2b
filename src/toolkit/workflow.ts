@@ -3,7 +3,7 @@ import type { Box, Provider, RepoSpec, StartOpts, Terminal } from '../providers/
 import { shellQuote } from '../shell';
 import { forgetBake, lookupSnapshot, recordBake, recordedBakes } from './bake-records';
 import { bakeScript, cloneCommand, switchScript } from './git-scripts';
-import { checkoutDir, mirrorDir, snapshotName } from './layout';
+import { bakeBoxName, checkoutDir, mirrorDir, snapshotName } from './layout';
 import type { Machine, MachineHost } from './machine';
 import { putFile } from './files';
 import { configureGit, configureGitIdentity, pushEnv, runChecked, runSetup, scrubCreds, withEnv, writeCredentials } from './session';
@@ -54,7 +54,7 @@ async function checkout({
       cmd: switchScript({ mirror, dir, branch, depth: repo.clone.depth }),
     });
   } else {
-    step('no baked snapshot for this repo, cloning (slow; run `l2b bake` once to speed this up)');
+    step('no bake to start from: running setup and cloning');
     await runSetup({ box: machine, setup: repo.setup, failureNote: null });
     await runChecked({
       box: machine,
@@ -128,13 +128,14 @@ export function machineWorkflow({ host }: { host: MachineHost }): Provider {
   /**
    * Credentials are used to clone, then scrubbed, and the snapshot is
    * filesystem-only so no memory (and no secret) is kept. A failed bake leaves
-   * its box up for inspection.
+   * its box up for inspection until it expires or the next bake replaces it.
    */
   async function bake({ repo, credentials, image }: Parameters<Provider['bake']>[0]) {
     const slug = slugOf(repo);
-    const bakeName = `bake-${repo.name}`;
+    const bakeName = bakeBoxName(slug);
     if (await host.exists({ name: bakeName })) {
-      throw new Error(`stale bake sandbox "${bakeName}" exists; run: l2b down ${bakeName}`);
+      step(`removing box "${bakeName}" left by an earlier bake`);
+      await (await host.connect({ name: bakeName })).destroy();
     }
     step(`creating bake box "${bakeName}"`);
     const machine = await host.create({ name: bakeName, image: image ?? host.defaultImage, workdir: host.homeDir, idle: null });

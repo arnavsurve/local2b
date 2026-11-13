@@ -1,7 +1,9 @@
-import { chmodSync, cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { randomBytes } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { dirname, isAbsolute, join } from 'node:path';
 import { $ } from 'bun';
+import { z } from 'zod';
 import { configSchema } from '../config';
 import { buildContext } from '../context';
 import type { ContractSubject } from '../providers/contract';
@@ -62,11 +64,17 @@ const repoKey = (repo: RepoSpec) => `${repo.owner}/${repo.name}`;
  * follows the injected clock: a box idle past its window is gone on the next
  * call. Terminals are unsupported. `failure` makes every call fail the way a
  * missing key or an unreachable API would.
+ *
+ * Bakes are kept on disk under `root`, so another process given the same
+ * root (a background `l2b bake`) shares them, as processes share a real
+ * provider's bakes. A re-bake writes the new bake, then flips the record;
+ * the old one stays on disk for starts already copying it.
+ * Boxes live only in this process. `root` null makes a fresh temp directory.
  */
-export function fakeProvider({ id, clock, failure }: { id: string; clock: FakeClock; failure: FakeFailure }) {
-  const root = mkdtempSync(join(tmpdir(), `l2b-fake-${id}-`));
+export function fakeProvider({ id, clock, failure, root: given }: { id: string; clock: FakeClock; failure: FakeFailure; root: string | null }) {
+  const root = given ?? mkdtempSync(join(tmpdir(), `l2b-fake-${id}-`));
   const boxes = new Map<string, FakeBox>();
-  const bakes = new Map<string, { home: string; dir: string; at: Date }>();
+  const bakes = fakeBakeStore({ root });
   /** Every command line run, as a provider-side history would keep it. */
   const history: string[] = [];
   let prepared = 0;
@@ -219,10 +227,9 @@ export function fakeProvider({ id, clock, failure }: { id: string; clock: FakeCl
     },
     async bake({ repo, credentials }) {
       guard();
-      const base = join(root, 'bakes', repo.owner, repo.name);
+      const base = join(root, 'bakes', repo.owner, repo.name, randomBytes(4).toString('hex'));
       const home = join(base, 'home');
       const dir = join(base, 'checkout');
-      rmSync(base, { recursive: true, force: true });
       mkdirSync(home, { recursive: true });
       try {
         const env = envFor({ home, tmp: home, env: repo.env, credentials });
@@ -241,12 +248,13 @@ export function fakeProvider({ id, clock, failure }: { id: string; clock: FakeCl
     },
     async bakes() {
       guard();
-      return [...bakes].map(([repo, { at }]) => ({ repo, name: repo, id: `${id}:${repo}`, createdAt: at }));
+      return [...bakes.all()].map(([repo, { at }]) => ({ repo, name: repo, id: `${id}:${repo}`, createdAt: at }));
     },
     async deleteBake({ repo }) {
       guard();
+      const existed = bakes.delete(repoKey(repo));
       rmSync(join(root, 'bakes', repo.owner, repo.name), { recursive: true, force: true });
-      return bakes.delete(repoKey(repo));
+      return existed;
     },
     async start({ name, repo, branch, source, idle, credentials, gitIdentity }) {
       guard();
@@ -322,11 +330,46 @@ export function fakeProvider({ id, clock, failure }: { id: string; clock: FakeCl
 
   return {
     provider,
+    root,
     history,
     findPersisted,
     prepared: () => prepared,
     alive: () => [...boxes.keys()],
     cleanup: () => rmSync(root, { recursive: true, force: true }),
+  };
+}
+
+type FakeBake = { home: string; dir: string; at: Date };
+
+const fakeBakesSchema = z.record(z.string(), z.object({ home: z.string(), dir: z.string(), at: z.iso.datetime() }));
+
+/** The fake's bake records, in one JSON file replaced by rename so another process never reads half of it. */
+function fakeBakeStore({ root }: { root: string }) {
+  const path = join(root, 'bakes.json');
+  const read = () => {
+    if (!existsSync(path)) return new Map<string, FakeBake>();
+    const parsed = fakeBakesSchema.parse(JSON.parse(readFileSync(path, 'utf8')));
+    return new Map(Object.entries(parsed).map(([repo, bake]) => [repo, { ...bake, at: new Date(bake.at) }]));
+  };
+  const write = (bakes: Map<string, FakeBake>) => {
+    const tmp = `${path}.${process.pid}.tmp`;
+    writeFileSync(tmp, JSON.stringify(Object.fromEntries([...bakes].map(([repo, bake]) => [repo, { ...bake, at: bake.at.toISOString() }]))));
+    renameSync(tmp, path);
+  };
+  return {
+    all: read,
+    get: (repo: string) => read().get(repo) ?? null,
+    set(repo: string, bake: FakeBake) {
+      const bakes = read();
+      bakes.set(repo, bake);
+      write(bakes);
+    },
+    delete(repo: string) {
+      const bakes = read();
+      const existed = bakes.delete(repo);
+      write(bakes);
+      return existed;
+    },
   };
 }
 
@@ -359,7 +402,7 @@ const noTerminal: Terminal = {
 
 export async function fakeContractSubject(): Promise<ContractSubject> {
   const clock = fakeClock({ start: Date.now() });
-  const fake = fakeProvider({ id: 'fake', clock, failure: null });
+  const fake = fakeProvider({ id: 'fake', clock, failure: null, root: null });
   const origin = await fakeOrigin();
   const idle = { minutes: 15 };
   return {
@@ -388,11 +431,31 @@ export async function fakeContractSubject(): Promise<ContractSubject> {
   };
 }
 
+/** What `fake-cli.ts` needs to rebuild a `fakeContext` in another process. */
+export const fakeWorldSchema = z.object({
+  providers: z.array(z.object({ id: z.string(), failure: z.enum(['auth', 'network']).nullable(), root: z.string() })),
+  configured: z.array(z.string()),
+  config: z.record(z.string(), z.unknown()),
+  originRoot: z.string(),
+});
+
+export type FakeWorld = z.infer<typeof fakeWorldSchema>;
+
+/** The config a fake context runs with: `config` over a git host serving the local origins. */
+export const fakeWorldConfig = (world: Pick<FakeWorld, 'config' | 'originRoot'>) =>
+  configSchema.parse({ gitHost: { type: 'github', baseUrl: `file://${world.originRoot}` }, ...world.config });
+
+const FAKE_CLI = join(import.meta.dir, 'fake-cli.ts');
+
 /**
  * A context with several named fake providers sharing one clock. The first is
  * the config default; `configured` lists the ones searched when addressing a
  * box by name. Repos clone from local origins created by `addOrigin`. The
  * context's cwd is an empty directory outside any checkout.
+ *
+ * `background: 'bake'` runs background bakes for real, as detached
+ * `fake-cli.ts` processes sharing these fake providers' bakes. `inert` makes
+ * them processes that exit at once, for tests about something else.
  */
 export function fakeContext({
   providers,
@@ -401,6 +464,7 @@ export function fakeContext({
   env,
   config,
   clock,
+  background,
 }: {
   providers: { id: string; failure: FakeFailure }[];
   configured: string[];
@@ -408,20 +472,30 @@ export function fakeContext({
   env: string | null;
   config: Record<string, unknown>;
   clock: FakeClock;
+  background: 'bake' | 'inert';
 }) {
   const originRoot = mkdtempSync(join(tmpdir(), 'l2b-origins-'));
   const cwd = mkdtempSync(join(tmpdir(), 'l2b-cwd-'));
-  const fakes = providers.map(({ id, failure }) => fakeProvider({ id, clock, failure }));
+  const fakes = providers.map(({ id, failure }) => fakeProvider({ id, clock, failure, root: null }));
   const [first] = fakes;
   if (!first) throw new Error('fakeContext needs at least one provider');
+  const world: FakeWorld = {
+    providers: providers.map(({ id, failure }, i) => ({ id, failure, root: fakes[i]?.root ?? '' })),
+    configured,
+    config,
+    originRoot,
+  };
+  const worldPath = join(originRoot, 'world.json');
+  writeFileSync(worldPath, JSON.stringify(world));
   const ctx = buildContext({
-    config: configSchema.parse({ gitHost: { type: 'github', baseUrl: `file://${originRoot}` }, ...config }),
+    config: fakeWorldConfig(world),
     providers: fakes.map((f) => f.provider),
     configured,
     defaultId: first.provider.id,
     flag,
     env,
     cwd,
+    l2b: background === 'bake' ? [process.execPath, FAKE_CLI, worldPath] : ['true'],
   });
   const fake = (id: string) => {
     const found = fakes.find((f) => f.provider.id === id);

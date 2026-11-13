@@ -34,6 +34,7 @@ function context(over: Partial<Omit<Parameters<typeof fakeContext>[0], 'clock'>>
     env: null,
     config: {},
     clock: fakeClock({ start: Date.now() }),
+    background: 'inert',
     ...over,
   });
   cleanups.push(made.cleanup);

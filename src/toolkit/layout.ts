@@ -15,3 +15,6 @@ export const snapshotName = (repo: string) => {
   const { owner, name } = parseRepo(repo);
   return `l2b-${slug(owner)}-${slug(name)}`;
 };
+
+/** The box a bake of `repo` runs in. One per repo, so a bake replaces only what its own repo's earlier bake left behind. */
+export const bakeBoxName = (repo: string) => snapshotName(repo).replace(/^l2b-/, 'bake-');

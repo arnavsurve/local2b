@@ -1,11 +1,12 @@
 import { parseArgs } from 'node:util';
 import { recordBoxStart } from '../box-records';
 import { joinCommand, splitOnDoubleDash } from '../args';
+import { keepBakeCurrent } from '../auto-bake';
 import type { Command } from '../context';
 import { usageError } from '../help';
 import { hintOnExit, warnIfUnconfigured } from '../hints';
 import { generatedBoxName, runOnce } from '../run-once';
-import { startOptsFor, toProcess, warnIfStale } from '../start';
+import { startOptsFor, toProcess } from '../start';
 import { branchFor, resolveTarget } from '../target';
 
 /** One call for one-off work: box up, run, box gone. Exits with the command's exit code. */
@@ -29,7 +30,7 @@ export const run: Command = async ({ ctx: base, args }) => {
   const { ctx, repo } = target;
   const branch = branchFor({ target, flag: values.branch ?? null });
   const name = values.name ?? generatedBoxName({ repo });
-  const start = await startOptsFor({
+  const requested = await startOptsFor({
     ctx,
     name,
     repo,
@@ -39,8 +40,8 @@ export const run: Command = async ({ ctx: base, args }) => {
     doppler: values.doppler ?? null,
     image: values.image ?? null,
   });
-  warnIfUnconfigured({ target, repo: start.repo });
-  await warnIfStale({ ctx, start });
+  warnIfUnconfigured({ target, repo: requested.repo });
+  const start = await keepBakeCurrent({ ctx, start: requested, doppler: values.doppler ?? null });
 
   const exitCode = await runOnce({
     provider: ctx.provider,

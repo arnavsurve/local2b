@@ -7,7 +7,7 @@ let fake: ReturnType<typeof fakeProvider>;
 let quiet: ReturnType<typeof spyOn>;
 
 beforeEach(() => {
-  fake = fakeProvider({ id: 'fake', clock: fakeClock({ start: Date.now() }), failure: null });
+  fake = fakeProvider({ id: 'fake', clock: fakeClock({ start: Date.now() }), failure: null, root: null });
   quiet = spyOn(console, 'error').mockImplementation(() => {});
 });
 

@@ -1,47 +1,11 @@
 #!/usr/bin/env bun
 import { touchConnectedBoxes } from './box-records';
-import { bake } from './commands/bake';
-import { bakes } from './commands/bakes';
-import { creds } from './commands/creds';
-import { exec } from './commands/exec';
-import { down, pause } from './commands/lifecycle';
-import { jobs, logs } from './commands/jobs';
-import { image } from './commands/image';
-import { ls } from './commands/ls';
-import { put } from './commands/put';
-import { run } from './commands/run';
-import { shell } from './commands/shell';
-import { init } from './commands/init';
-import { install } from './commands/install';
-import { up } from './commands/up';
-import { update } from './commands/update';
-import { url } from './commands/url';
-import { createContext, type Command } from './context';
-import { commandHelp, isCommandName, rootHelp, wantsHelp, type CommandName } from './help';
+import { commands } from './commands';
+import { createContext } from './context';
+import { commandHelp, isCommandName, rootHelp, wantsHelp } from './help';
 import { extractProviderFlag } from './providers/select';
 import { CommandFailedError } from './providers/types';
 import { VERSION } from './version';
-
-const commands: Record<CommandName, Command> = {
-  run,
-  up,
-  image,
-  bake,
-  bakes,
-  init,
-  exec,
-  logs,
-  jobs,
-  put,
-  shell,
-  install,
-  update,
-  creds,
-  url,
-  ls,
-  pause,
-  down,
-};
 
 async function main() {
   const { providerId, args: argv } = extractProviderFlag({ args: process.argv.slice(2) });

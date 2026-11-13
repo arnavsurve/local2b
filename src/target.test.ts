@@ -28,6 +28,7 @@ async function setup() {
     env: null,
     config: {},
     clock: fakeClock({ start: Date.now() }),
+    background: 'inert',
   });
   cleanups.push(made.cleanup);
   await made.addOrigin({ repo: 'o/r' });

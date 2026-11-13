@@ -27,7 +27,7 @@ async function setup() {
     flag: null,
     env: null,
     config: {},
-    clock,
+    clock, background: 'inert',
   });
   cleanups.push(made.cleanup);
   await made.addOrigin({ repo: 'o/r' });
@@ -55,12 +55,13 @@ test('up and run say so when the settings a bake used have changed since', async
   const { ctx, project } = await setup();
   project({ repo: 'o/r', install: 'true' });
   await output(() => bake({ ctx, args: [] }));
-  expect(await output(() => up({ ctx, args: ['same'] }))).not.toContain(CHANGED);
+  expect(await output(() => up({ ctx, args: ['same'] }))).not.toContain('changed since the bake');
 
+  project({ repo: 'o/r', install: 'yes | head -1' });
+  expect(await output(() => run({ ctx, args: ['--', 'true'] }))).toContain('.l2b.json changed since the bake of o/r');
   project({ repo: 'o/r', install: 'true', setup: ['echo tool'] });
-  const changed = await output(() => run({ ctx, args: ['--', 'true'] }));
-  expect(changed).toContain(`l2b: ${CHANGED}; run l2b bake o/r`);
-  expect(await output(() => up({ ctx, args: ['fresh', '--full'] }))).not.toContain(CHANGED);
+  expect(await output(() => run({ ctx, args: ['--', 'true'] }))).toContain('setup or warm changed since the bake of o/r');
+  expect(await output(() => up({ ctx, args: ['fresh', '--full'] }))).not.toContain('changed since the bake');
 });
 
 test('bake --if-older-than skips a recent bake unless the settings changed', async () => {

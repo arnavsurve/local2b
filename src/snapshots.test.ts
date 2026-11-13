@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, expect, spyOn, test } from 'bun:test';
+import { recordBakeConfig } from './bake-config';
 import { bake } from './commands/bake';
 import { up } from './commands/up';
 import { repoSpecFor } from './repo';
@@ -18,13 +19,14 @@ afterEach(() => {
 /** A fake provider whose clock reads `ageHours` ago when the repo is baked, then catches up to now. */
 async function setup({ ageHours, config }: { ageHours: number | null; config: Record<string, unknown> }) {
   const clock: FakeClock = fakeClock({ start: Date.now() - (ageHours ?? 0) * HOUR });
-  const made = fakeContext({ providers: [{ id: 'fake', failure: null }], configured: ['fake'], flag: null, env: null, config, clock });
+  const made = fakeContext({ providers: [{ id: 'fake', failure: null }], configured: ['fake'], flag: null, env: null, config, clock, background: 'inert' });
   cleanups.push(made.cleanup);
   await made.addOrigin({ repo: 'o/r' });
   const fake = made.fake('fake');
   const spec = repoSpecFor({ config: made.ctx.config, repo: 'o/r', install: null, warm: null, baseBranch: null });
   if (ageHours !== null) {
     await fake.provider.bake({ repo: spec, credentials: { variables: {}, git: null }, image: null });
+    await recordBakeConfig({ provider: 'fake', repo: spec });
     clock.advance({ ms: ageHours * HOUR });
   }
   return { ...made, provider: fake.provider, history: fake.history, spec };
@@ -69,26 +71,26 @@ test('bake rejects a malformed --if-older-than before doing any work', async () 
   expect(history).toEqual([]);
 });
 
-async function upHints({ ageHours, staleSnapshotHours }: { ageHours: number | null; staleSnapshotHours: number | null }) {
+async function rebakes({ ageHours, staleSnapshotHours }: { ageHours: number | null; staleSnapshotHours: number | null }) {
   const { ctx } = await setup({ ageHours, config: staleSnapshotHours === null ? {} : { staleSnapshotHours } });
   const { err } = await captured(() => up({ ctx, args: ['b', '--repo', 'o/r'] }));
-  return err.filter((line) => line.includes('l2b bake'));
+  return err.filter((line) => line.includes('Baking in the background'));
 }
 
-test('up hints to re-bake when the bake is older than the default 72h', async () => {
-  const hints = await upHints({ ageHours: 100, staleSnapshotHours: null });
-  expect(hints).toHaveLength(1);
-  expect(hints[0]).toContain('l2b bake o/r');
+test('up re-bakes in the background when the bake is older than the default 72h', async () => {
+  const lines = await rebakes({ ageHours: 100, staleSnapshotHours: null });
+  expect(lines).toHaveLength(1);
+  expect(lines[0]).toContain('the bake of o/r is 4d old; this box starts from it');
 });
 
-test('up stays quiet for a fresh bake or none at all', async () => {
-  expect(await upHints({ ageHours: 10, staleSnapshotHours: null })).toEqual([]);
-  expect(await upHints({ ageHours: null, staleSnapshotHours: null })).toEqual([]);
+test('up bakes in the background when there is no bake, and not for a fresh one', async () => {
+  expect(await rebakes({ ageHours: 10, staleSnapshotHours: null })).toEqual([]);
+  expect(await rebakes({ ageHours: null, staleSnapshotHours: null })).toHaveLength(1);
 });
 
 test('staleSnapshotHours is configurable', async () => {
-  expect(await upHints({ ageHours: 10, staleSnapshotHours: 5 })).toHaveLength(1);
-  expect(await upHints({ ageHours: 100, staleSnapshotHours: 200 })).toEqual([]);
+  expect(await rebakes({ ageHours: 10, staleSnapshotHours: 5 })).toHaveLength(1);
+  expect(await rebakes({ ageHours: 100, staleSnapshotHours: 200 })).toEqual([]);
 });
 
 test('up --full ignores the bake and clones the full history', async () => {

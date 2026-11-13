@@ -24,7 +24,7 @@ async function setup() {
     flag: null,
     env: null,
     config: { idle: { minutes: 15 } },
-    clock,
+    clock, background: 'inert',
   });
   cleanups.push(made.cleanup);
   await made.addOrigin({ repo: 'o/r' });

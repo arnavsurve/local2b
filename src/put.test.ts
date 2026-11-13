@@ -13,7 +13,7 @@ afterEach(() => {
 });
 
 async function setup() {
-  const fake = fakeProvider({ id: 'fake', clock: fakeClock({ start: Date.now() }), failure: null });
+  const fake = fakeProvider({ id: 'fake', clock: fakeClock({ start: Date.now() }), failure: null, root: null });
   const local = mkdtempSync(join(tmpdir(), 'l2b-put-'));
   cleanups.push(fake.cleanup, () => rmSync(local, { recursive: true, force: true }));
   const box = await fake.provider.start({
