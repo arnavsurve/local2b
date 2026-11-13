@@ -26,8 +26,6 @@ export function fakeMachineHost({
   const executed: string[] = [];
   const files = new Map<string, string>();
   const snapshots = new Set<string>();
-  /** Names `ls -A` reports for any checkout root. */
-  const rootFiles: string[] = [];
 
   const guard = () => {
     if (failure === 'auth') throw new ProviderAuthError({ provider: id, hint: `set ${id.toUpperCase()}_API_KEY` });
@@ -38,9 +36,8 @@ export function fakeMachineHost({
     id: `id-${name}`,
     workdir,
     homeDir,
-    async exec({ cmd, onOutput }) {
+    async exec({ cmd }) {
       executed.push(cmd);
-      if (cmd === 'ls -A') onOutput({ stream: 'stdout', data: rootFiles.map((f) => `${f}\n`).join('') });
       return execExitCode;
     },
     async shell() {
@@ -89,5 +86,5 @@ export function fakeMachineHost({
     buildImage: async () => 'fake-image',
   };
 
-  return { provider, alive, executed, files, snapshots, rootFiles };
+  return { provider, alive, executed, files, snapshots };
 }
