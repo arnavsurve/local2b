@@ -56,6 +56,11 @@ export type MachineSummary = {
  * The host owns the idle policy: a machine must expire on its own after the
  * configured idle time with no l2b activity, and any `exec` or `shell` must
  * hold that deadline off while it runs.
+ *
+ * A base image reference is opaque to the toolkit. It names one build of
+ * `defaultImage` for good, so a machine created from it runs that build even
+ * while the host still serves an older build under `defaultImage`. A host
+ * whose base never changes under its name may use the name itself.
  */
 export type MachineHost = {
   id: string;
@@ -83,8 +88,10 @@ export type MachineHost = {
    * `defaultImage` is used as it is.
    */
   imageRecipe(): string | null;
-  /** Whether `defaultImage` exists on the host. */
-  imageExists(): Promise<boolean>;
-  /** Builds the tooling-only base image and returns its reference. */
+  /** Whether the build `ref` names is still on the host. */
+  imageExists(opts: { ref: string }): Promise<boolean>;
+  /** The reference of the finished build `defaultImage` names now, or null when there is none. */
+  currentImage(): Promise<string | null>;
+  /** Builds the tooling-only base image and returns the reference of that build. */
   buildImage(): Promise<string>;
 };

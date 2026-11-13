@@ -24,13 +24,13 @@ test('lookupSnapshot has no snapshot until one exists, and no age until a bake i
   snapshots.add(snapshotName('o/r'));
   expect((await lookupSnapshot({ provider, repo: 'o/r' }))?.createdAt).toBeNull();
   const at = new Date(Date.now() - 3_600_000);
-  await recordBake({ provider: 'fake', repo: 'o/r', at });
+  await recordBake({ provider: 'fake', repo: 'o/r', at, base: 'fake-image@0' });
   expect((await lookupSnapshot({ provider, repo: 'o/r' }))?.createdAt?.getTime()).toBe(at.getTime());
 });
 
 test('bake records are kept per provider', async () => {
   const { provider, snapshots } = fakeMachineHost({ id: 'fake', execExitCode: 0, homeDir: '/home/user', failure: null });
   snapshots.add(snapshotName('o/r'));
-  await recordBake({ provider: 'other', repo: 'o/r', at: new Date() });
+  await recordBake({ provider: 'other', repo: 'o/r', at: new Date(), base: 'fake-image@0' });
   expect((await lookupSnapshot({ provider, repo: 'o/r' }))?.createdAt).toBeNull();
 });

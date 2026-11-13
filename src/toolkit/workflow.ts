@@ -1,8 +1,8 @@
 import { step } from '../progress';
 import type { Box, Provider, RepoSpec, StartOpts, Terminal } from '../providers/types';
 import { shellQuote } from '../shell';
-import { baseImageCurrent, buildBaseImage, ensureBaseImage } from './base-image';
-import { forgetBake, lookupSnapshot, recordBake, recordedBakes } from './bake-records';
+import { baseImageCurrent, buildBaseImage, currentBaseBuild, ensureBaseImage } from './base-image';
+import { forgetBake, lookupSnapshot, recordBake, recordedBakes, type BakeBase } from './bake-records';
 import { bakeScript, cloneCommand, switchScript } from './git-scripts';
 import { bakeBoxName, checkoutDir, mirrorDir, snapshotName } from './layout';
 import type { Machine, MachineHost } from './machine';
@@ -108,10 +108,10 @@ export function machineWorkflow({ host }: { host: MachineHost }): Provider {
   async function start({ name, repo, branch, source, image, idle, credentials, gitIdentity }: StartOpts) {
     step('looking for a baked snapshot');
     const snapshot = repo && source === 'bake' ? await lookupSnapshot({ provider: host, repo: slugOf(repo) }) : null;
-    if (!snapshot && image === null) await ensureBaseImage({ host });
+    const from = snapshot?.id ?? image ?? (await ensureBaseImage({ host }));
     const workdir = repo ? checkoutDir({ homeDir: host.homeDir, repo: slugOf(repo) }) : host.homeDir;
     step(`creating box "${name}"`);
-    const machine = await host.create({ name, image: snapshot?.id ?? image ?? host.defaultImage, workdir, idle });
+    const machine = await host.create({ name, image: from, workdir, idle });
     try {
       step('pushing credentials');
       await writeCredentials({ box: machine, credentials });
@@ -139,9 +139,9 @@ export function machineWorkflow({ host }: { host: MachineHost }): Provider {
       step(`removing box "${bakeName}" left by an earlier bake`);
       await (await host.connect({ name: bakeName })).destroy();
     }
-    if (image === null) await ensureBaseImage({ host });
+    const from = image ?? (await ensureBaseImage({ host }));
     step(`creating bake box "${bakeName}"`);
-    const machine = await host.create({ name: bakeName, image: image ?? host.defaultImage, workdir: host.homeDir, idle: null });
+    const machine = await host.create({ name: bakeName, image: from, workdir: host.homeDir, idle: null });
     await writeCredentials({ box: machine, credentials });
     await pushEnv({ box: machine, env: repo.env });
     if (credentials.git) await configureGit({ box: machine, host: credentials.git });
@@ -178,7 +178,7 @@ export function machineWorkflow({ host }: { host: MachineHost }): Provider {
     const snapshotId = await machine.snapshot({ name: snapshotName(slug) });
     await machine.destroy();
     const bakedAt = new Date();
-    await recordBake({ provider: host.id, repo: slug, at: bakedAt });
+    await recordBake({ provider: host.id, repo: slug, at: bakedAt, base: image === null ? from : null });
     return { summary: snapshotId, bakedAt };
   }
 
@@ -196,13 +196,35 @@ export function machineWorkflow({ host }: { host: MachineHost }): Provider {
     });
   }
 
+  /** Whether a bake was made on the base image build this machine uses now. A bake with no local record cannot be judged and passes. */
+  async function onCurrentBase({ base }: { base: BakeBase | null }) {
+    if (base === null) return true;
+    switch (base.kind) {
+      case 'own-image':
+        return true;
+      case 'unrecorded':
+        return false;
+      case 'base': {
+        const current = await currentBaseBuild({ host });
+        return current === null || current === base.ref;
+      }
+      default: {
+        const unreachable: never = base;
+        return unreachable;
+      }
+    }
+  }
+
   /**
-   * A bake made on an older base image reports no age, so core makes it
-   * again, which also rebuilds the base image, while starts keep using it.
+   * A bake made on an older base image, or on another build of it, reports
+   * no age, so core makes it again, which also rebuilds the base image when
+   * its recipe changed, while starts keep using it.
    */
   async function bakedAt({ repo }: { repo: RepoSpec }) {
     if (!(await baseImageCurrent({ host }))) return null;
-    return (await lookupSnapshot({ provider: host, repo: slugOf(repo) }))?.createdAt ?? null;
+    const snapshot = await lookupSnapshot({ provider: host, repo: slugOf(repo) });
+    if (!snapshot || !(await onCurrentBase({ base: snapshot.base }))) return null;
+    return snapshot.createdAt;
   }
 
   async function deleteBake({ repo }: { repo: RepoSpec }) {
