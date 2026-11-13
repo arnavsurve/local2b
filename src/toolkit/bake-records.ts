@@ -36,9 +36,29 @@ export async function recordBake({
 }) {
   const times = await readBakeTimes();
   times[bakeKey({ provider, repo })] = at.toISOString();
+  await writeBakeTimes(times);
+}
+
+async function writeBakeTimes(times: Record<string, string>) {
   const path = bakeTimesPath();
   await mkdir(dirname(path), { recursive: true });
   await Bun.write(path, JSON.stringify(times, null, 2));
+}
+
+/** Drops the record of when `repo` was baked on `provider`. */
+export async function forgetBake({ provider, repo }: { provider: string; repo: string }) {
+  const times = await readBakeTimes();
+  if (!Object.hasOwn(times, bakeKey({ provider, repo }))) return;
+  delete times[bakeKey({ provider, repo })];
+  await writeBakeTimes(times);
+}
+
+/** The repos this machine baked on `provider`, with when. */
+export async function recordedBakes({ provider }: { provider: string }) {
+  const prefix = `${provider}:`;
+  return Object.entries(await readBakeTimes()).flatMap(([key, at]) =>
+    key.startsWith(prefix) ? [{ repo: key.slice(prefix.length), at: new Date(at) }] : []
+  );
 }
 
 /**

@@ -139,6 +139,19 @@ export function newestBake<T extends Pick<Sandbox, 'id' | 'name' | 'state' | 'la
   return done[0] ?? null;
 }
 
+/** The newest finished bake of each repo among `sandboxes`. The base image bake is not a repo's. */
+export function repoBakes<T extends Pick<Sandbox, 'id' | 'name' | 'state' | 'labels' | 'stoppedAt' | 'dataExpiredAt'>>({
+  sandboxes,
+}: {
+  sandboxes: T[];
+}) {
+  const names = new Set(sandboxes.flatMap((s) => s.labels?.[BAKE_LABEL] ?? []).filter((name) => name !== BASE_SNAPSHOT));
+  return [...names].flatMap((name) => {
+    const bake = newestBake({ sandboxes, bake: name });
+    return bake ? [{ name, id: bake.id, createdAt: bake.stoppedAt }] : [];
+  });
+}
+
 /** A stopped l2b box that is not a finished bake: it expired, so the adapter deletes it. */
 export function isExpiredBox({ sandbox }: { sandbox: Pick<Sandbox, 'name' | 'state' | 'labels'> }) {
   if (sandbox.state !== 'archived' || !sandbox.labels?.[NAME_LABEL]) return false;

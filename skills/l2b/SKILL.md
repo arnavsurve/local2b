@@ -35,6 +35,7 @@ l2b does not guess how to set a project up. The nearest `.l2b.json` (the current
 
 When a project needs a toolchain or a dependency install, write or edit `.l2b.json` instead of installing things inside `run` or `exec` commands. Do not repeat `curl ... | sh` or `apt-get install` in every `run`: put it in `setup` once. A command that exits 127 (`command not found`) means `setup` is missing that tool.
 
+- Before writing `setup` or `install`, check what the repo uses: its lockfile, `pyproject.toml`, `go.mod`, `Cargo.toml` or `package.json`. Look in the local checkout, or else with `l2b run --repo <owner/repo> -- ls` or on the git host. Do not write an install from memory.
 - `l2b init` writes a starter file in the current directory (it fills in `repo` and `baseBranch` in a checkout). Edit it; do not overwrite one that exists.
 - `setup`: commands run as the box user, with sudo, in the home directory, before the clone. They run at bake and when no bake exists. Put binaries on the default PATH (link them into `/usr/local/bin`); shell profile changes do not apply.
 - `install`: runs in the checkout on every start. It must be safe to run again on an already installed checkout.

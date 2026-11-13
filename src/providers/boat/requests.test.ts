@@ -10,6 +10,7 @@ import {
   forkRequest,
   isExpiredBox,
   newestBake,
+  repoBakes,
   exitCodeOf,
   inDirCommand,
   nameFilter,
@@ -91,6 +92,18 @@ test('the bake is the newest finished, stopped bake box whose disk boat still ke
   const sandboxes = [older, newer, failed, expired, running, otherBake];
   expect(newestBake({ sandboxes, bake: 'l2b-acme-api' })?.id).toBe('bx_new');
   expect(newestBake({ sandboxes: [failed, expired, running], bake: 'l2b-acme-api' })).toBeNull();
+});
+
+test('repo bakes are the newest finished bake per name, without the base image bake', () => {
+  const older = stoppedBox({ id: 'bx_old' });
+  const newer = stoppedBox({ id: 'bx_new', stoppedAt: new Date('2026-11-02T00:00:00Z') });
+  const failed = stoppedBox({ id: 'bx_failed', name: 'bake-api' });
+  const web = stoppedBox({ id: 'bx_web', name: bakedBoxName({ bake: 'l2b-acme-web' }), labels: { l2b: 'bake-web', 'l2b-bake': 'l2b-acme-web' } });
+  const base = stoppedBox({ id: 'bx_base', name: bakedBoxName({ bake: 'l2b-base' }), labels: { l2b: 'l2b-image-build', 'l2b-bake': 'l2b-base' } });
+  expect(repoBakes({ sandboxes: [older, newer, failed, web, base] })).toEqual([
+    { name: 'l2b-acme-api', id: 'bx_new', createdAt: new Date('2026-11-02T00:00:00Z') },
+    { name: 'l2b-acme-web', id: 'bx_web', createdAt: new Date('2026-11-01T00:00:00Z') },
+  ]);
 });
 
 test('stopped l2b boxes that are not finished bakes count as expired', () => {

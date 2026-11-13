@@ -60,6 +60,8 @@ You need an API key for your provider and `gh` (or `GH_TOKEN`). A secret source 
 - `url <name> <port>`: public URL for a port.
 - `creds <name> [--repo o/r]`: re-push credentials.
 - `bake [o/r] [--install cmd] [--warm cmd] [--branch b] [--if-older-than 12h]`: build the repo snapshot.
+- `bake --delete [o/r]`: delete the repo's bake on the selected provider and l2b's local records of it. Later boxes start without a bake.
+- `bakes`: list bakes on every configured provider, or on `--provider`'s: repo, provider, id and age. A bake l2b has no local record of shows its own name and no age.
 - `image build`: build the base image.
 - `update`: replace the binary with the latest release and refresh the skill.
 - `install`: install the agent skill into `~/.agents/skills/l2b` and `~/.claude/skills/l2b`. From a checkout it links the skill and puts `l2b` on PATH; a released binary writes the skill files.
@@ -283,7 +285,7 @@ A provider gets the workflow done with its own primitives. Core says what it wan
 2. Throw `UnsupportedError` for anything the provider cannot do. l2b prints its message as it comes.
 3. Keep provider policy in the adapter and its own config block: what pause keeps, ssh or pty, snapshots, image builds, lifetime caps.
 4. Reuse `src/toolkit/` if it fits. It has git scripts, the setup runner, the credential env file, the file write behind `put`, the heartbeat, local bake records, the base recipe and `machineWorkflow`, which turns low-level machine primitives into a `Provider`. Nothing requires it.
-5. Pass the contract suite. Add a test that calls `describeProviderContract({ name, makeProvider, timeoutMs })` from `src/providers/contract.ts`. It covers the branch checkout with dependencies installed, setup ordering, exec exit codes and streams, background processes outliving exec, `put`, the git identity, credentials reaching commands and never being persisted, bakes, run-once cleanup, idle expiry and `UnsupportedError`. Gate a real-provider run behind an environment variable, as `src/providers/e2b/contract.test.ts` does with `L2B_CONTRACT_E2B=1`.
+5. Pass the contract suite. Add a test that calls `describeProviderContract({ name, makeProvider, timeoutMs })` from `src/providers/contract.ts`. It covers the branch checkout with dependencies installed, setup ordering, exec exit codes and streams, background processes outliving exec, `put`, the git identity, credentials reaching commands and never being persisted, bakes, listing and deleting bakes, run-once cleanup, idle expiry and `UnsupportedError`. Gate a real-provider run behind an environment variable, as `src/providers/e2b/contract.test.ts` does with `L2B_CONTRACT_E2B=1`.
 6. Register the provider in `src/providers/index.ts` and `src/providers/ids.ts`, add its config block to `src/config.ts`, and give it a README section.
 
 ## Development

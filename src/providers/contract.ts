@@ -36,6 +36,8 @@ const TOOL_DIR = '~/.l2b-contract-tool';
 /** Counts its own runs and leaves a tool that only exists after it ran. */
 const SETUP = `mkdir -p ${TOOL_DIR} && echo run >> ${TOOL_DIR}/runs && printf '#!/bin/sh\\necho tool-ok\\n' > ${TOOL_DIR}/tool && chmod +x ${TOOL_DIR}/tool`;
 const TOOL_OUTPUT = '.l2b-contract-tool-output';
+/** Left in the checkout by `warm`, which only runs at bake. */
+const WARM_MARKER = '.l2b-contract-warmed';
 
 const uniqueName = (prefix: string) => `${prefix}-${randomBytes(3).toString('hex')}`;
 
@@ -327,6 +329,35 @@ export function describeProviderContract({
         await expectTool({ box: baked, runs: 1 });
       } finally {
         await baked.destroy();
+      }
+    }, timeoutMs);
+
+    test('a bake is listed; once deleted it is no longer found and a start falls back to a fresh start', async () => {
+      const slug = `${subject.repo.owner}/${subject.repo.name}`;
+      const warmed = (): RepoSpec => ({ ...repo(), warm: `touch ${WARM_MARKER}` });
+      await subject.provider.bake({ repo: warmed(), credentials: credentials({ value: canary }), image: null });
+      expect((await subject.provider.bakes()).map((b) => b.repo)).toContain(slug);
+
+      expect(await subject.provider.deleteBake({ repo: warmed() })).toBe(true);
+      expect((await subject.provider.bakes()).map((b) => b.repo)).not.toContain(slug);
+      expect(await subject.provider.bakedAt({ repo: warmed() })).toBeNull();
+      expect(await subject.provider.deleteBake({ repo: warmed() })).toBe(false);
+
+      const box = await subject.provider.start({
+        name: uniqueName('contract'),
+        repo: warmed(),
+        branch: subject.branch,
+        source: 'bake',
+        image: null,
+        idle: subject.idle,
+        credentials: credentials({ value: canary }),
+        gitIdentity: null,
+      });
+      try {
+        await expectCheckoutOf({ box, branch: subject.branch, ref: `refs/heads/${subject.branch}` });
+        expect((await capture({ box, cmd: `test -e ${WARM_MARKER}`, cwd: null })).exitCode).not.toBe(0);
+      } finally {
+        await box.destroy();
       }
     }, timeoutMs);
 
