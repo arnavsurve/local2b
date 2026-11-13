@@ -1,0 +1,48 @@
+name: release
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+jobs:
+  release:
+    # macOS so the darwin binaries can be ad-hoc signed; bun cross-compiles the linux ones.
+    runs-on: macos-latest
+    env:
+      TAG: ${{ github.ref_name }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - name: Tag matches package.json
+        run: |
+          version=$(jq -r .version package.json)
+          if [ "$TAG" != "v$version" ]; then
+            echo "::error::tag $TAG does not match package.json version $version"
+            exit 1
+          fi
+      - run: bun install --frozen-lockfile
+      - run: bun run typecheck
+      - run: bun test
+      - name: Build
+        run: |
+          mkdir dist
+          for target in darwin-arm64 darwin-x64 linux-x64 linux-arm64; do
+            bun build --compile --minify --target="bun-$target" src/cli.ts --outfile "dist/l2b-$target"
+          done
+      - name: Sign macOS binaries
+        # bun's own signature on a compiled binary is invalid and macOS kills it on launch; re-sign ad hoc.
+        run: |
+          for bin in dist/l2b-darwin-*; do
+            codesign --remove-signature "$bin" || true
+            codesign --sign - "$bin"
+            codesign --verify "$bin"
+          done
+      - name: Smoke test
+        run: |
+          [ "$(dist/l2b-darwin-arm64 --version)" = "${TAG#v}" ]
+          dist/l2b-darwin-arm64 --help >/dev/null
+      - name: Checksums
+        run: cd dist && shasum -a 256 l2b-* > SHA256SUMS && cat SHA256SUMS
+      - name: Publish
+        run: gh release create "$TAG" --verify-tag --generate-notes --title "$TAG" dist/*

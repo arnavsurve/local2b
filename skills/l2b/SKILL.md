@@ -81,7 +81,11 @@ Credentials (a GitHub token and any configured secrets) are written to the box's
 
 ## Not found?
 
-If `l2b` is not on the PATH, run `bun <path-to-local2b>/src/cli.ts install` once.
+If `l2b` is not on the PATH, install it:
+
+    curl -fsSL https://raw.githubusercontent.com/arnavsurve/local2b/main/install.sh | sh
+
+It installs to `~/.local/bin`. If that directory is not on the PATH, call `~/.local/bin/l2b` directly.
 
 ## Troubleshooting
 

@@ -13,13 +13,30 @@ That starts a box, checks out the branch with dependencies installed, runs the c
 - Destroys the box after `run`, and expires idle boxes on the provider's side.
 - Ships an agent skill. Commands default to the repo checkout, and `run` ends with `command exited <code>`.
 
+## Install
+
+    curl -fsSL https://raw.githubusercontent.com/arnavsurve/local2b/main/install.sh | sh
+
+The script downloads the latest release binary for macOS or Linux on arm64 or x64, checks it against the release's `SHA256SUMS`, and installs it to `~/.local/bin/l2b`. It then runs `l2b install`, which writes the agent skill to `~/.agents/skills/l2b` and `~/.claude/skills/l2b`.
+
+- `L2B_INSTALL_DIR=/some/dir` installs the binary elsewhere.
+- `L2B_VERSION=0.2.0` installs that release instead of the latest.
+- `l2b update` replaces the binary with the latest release and refreshes the skill.
+- `l2b --version` prints the installed version.
+
+To uninstall, delete the binary and the skill directories:
+
+    rm ~/.local/bin/l2b
+    rm -rf ~/.agents/skills/l2b ~/.claude/skills/l2b
+
+From a checkout, `bun install` then `bun src/cli.ts install` links `~/.local/bin/l2b` to the checkout and links the skill. A checkout updates with `git pull`.
+
 ## Quick start
 
-You need [Bun](https://bun.sh), an API key for your provider, and `gh` (or `GH_TOKEN`). A secret source is optional.
+You need an API key for your provider and `gh` (or `GH_TOKEN`). A secret source is optional.
 
-    bun install
-    mkdir -p ~/.config/l2b && cp config.example.json ~/.config/l2b/config.json
-    bun src/cli.ts install      # puts l2b on your PATH, links the agent skill
+    mkdir -p ~/.config/l2b
+    curl -fsSL https://raw.githubusercontent.com/arnavsurve/local2b/main/config.example.json -o ~/.config/l2b/config.json
     l2b image build             # once
     l2b bake my-org/my-repo     # once per repo
     l2b run --repo my-org/my-repo --branch main -- yarn test
@@ -38,6 +55,7 @@ You need [Bun](https://bun.sh), an API key for your provider, and `gh` (or `GH_T
 - `creds <name> [--repo o/r]`: re-push credentials.
 - `bake <o/r> [--install cmd] [--warm cmd] [--branch b] [--if-older-than 12h]`: build the repo snapshot.
 - `image build`: build the base image.
+- `update`: replace the binary with the latest release and refresh the skill.
 - `install`: install the agent skill into `~/.agents/skills/l2b` and `~/.claude/skills/l2b`. From a checkout it links the skill and puts `l2b` on PATH; a released binary writes the skill files.
 
 Use `run` for one-off work. Use `up`, `exec` and `down` when several commands need the same checkout, or you want a dev server behind a `url`.
@@ -214,6 +232,16 @@ A provider gets the workflow done with its own primitives. Core says what it wan
     bun test
     L2B_CONTRACT_E2B=1 bun test src/providers/e2b   # contract suite against real e2b boxes
     L2B_CONTRACT_BOAT=1 bun test src/providers/boat # contract suite against real boat boxes
+
+## Releasing
+
+    scripts/release.sh 0.3.0
+
+Run it from a clean checkout of an up-to-date `main`. It opens a PR that bumps the version in `package.json`, waits for checks, merges it, then tags the merge commit `v0.3.0` and pushes the tag.
+
+The tag starts `.github/workflows/release.yml`. It fails if the tag does not match `package.json`, runs the typecheck and tests, builds `l2b-darwin-arm64`, `l2b-darwin-x64`, `l2b-linux-x64` and `l2b-linux-arm64` with `bun build --compile`, signs the macOS binaries ad hoc, and publishes them with `SHA256SUMS` as a GitHub release.
+
+A failed release is fixed forward with a new patch version. A published tag is never moved.
 
 ## License
 
