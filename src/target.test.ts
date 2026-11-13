@@ -124,7 +124,7 @@ test('a .l2b.json naming another repo fails when it is the nearest', async () =>
   writeFileSync(join(made.work, PROJECT_FILE), JSON.stringify({ repo: 'o/elsewhere' }));
   const ctx = { ...made.ctx, cwd: made.clone };
   await expect(stderrOf(() => up({ ctx, args: ['b'] }))).rejects.toThrow(
-    `${join(made.work, PROJECT_FILE)} is for o/elsewhere, not o/r`
+    `${join(made.work, PROJECT_FILE)} is for o/elsewhere, not o/r; run l2b outside that directory, or pass --repo o/elsewhere`
   );
   await expect(stderrOf(() => up({ ctx: made.ctx, args: ['c', '--repo', 'o/r'] }))).resolves.not.toContain('is for');
 });

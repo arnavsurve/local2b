@@ -49,7 +49,7 @@ export async function findBoxProvider({ ctx, name }: { ctx: Context; name: strin
   if (record) throw new Error(expiredMessage({ record, now: new Date() }));
   const note = skipped.length ? `; skipped, cannot authenticate: ${skipped.map((p) => p.provider.id).join(', ')}` : '';
   const where = searched.map((p) => p.id).join(', ');
-  throw new Error(`no sandbox named "${name}" on ${where} (try: l2b ls)${note}`);
+  throw new Error(`no sandbox named "${name}" on ${where}; start one with \`l2b up ${name}\`, or list running boxes with \`l2b ls\`${note}`);
 }
 
 /** Connects to the box and counts it as l2b activity. */

@@ -71,7 +71,8 @@ export function resolveGitHost(host: GitHost): ResolvedGitHost {
           ],
         },
         tokenEnvVar: 'GH_TOKEN',
-        tokenHint: 'no GitHub token: set GH_TOKEN or run `gh auth login`',
+        tokenHint:
+          'no GitHub token: GH_TOKEN and GITHUB_TOKEN are not set and `gh auth token` printed none. Only the user can fix this: tell them to run `gh auth login` once',
       };
     }
     case 'gitlab': {
@@ -87,7 +88,8 @@ export function resolveGitHost(host: GitHost): ResolvedGitHost {
           ],
         },
         tokenEnvVar: 'GITLAB_TOKEN',
-        tokenHint: 'no GitLab token: set GITLAB_TOKEN or run `glab auth login`',
+        tokenHint:
+          'no GitLab token: GITLAB_TOKEN is not set and `glab auth token` printed none. Only the user can fix this: tell them to run `glab auth login` once',
       };
     }
     case 'generic':

@@ -7,7 +7,9 @@ const COMMAND_NOT_FOUND = 127;
 /** Says so when a repo box gets no setup and no install because no project file was found. */
 export function warnIfUnconfigured({ target, repo }: { target: Target; repo: RepoSpec | null }) {
   if (!repo || target.project || repo.setup.length > 0 || repo.install) return;
-  console.error(`l2b: no ${PROJECT_FILE} found from ${target.ctx.cwd}; nothing set up or installed (see l2b init)`);
+  console.error(
+    `l2b: no ${PROJECT_FILE} found from ${target.ctx.cwd}, so the box has a bare checkout with nothing set up or installed; if the work needs a toolchain or dependencies, run \`l2b init\` here and fill in setup and install`
+  );
 }
 
 /** Points at `setup` when a box command exits with the shell's "command not found" code. */

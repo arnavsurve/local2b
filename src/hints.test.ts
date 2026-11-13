@@ -52,7 +52,7 @@ async function stderrOf(task: () => Promise<void>) {
 test('a repo run with no .l2b.json says nothing is set up or installed', async () => {
   const { ctx } = await setup({ config: {} });
   const lines = await stderrOf(() => run({ ctx, args: ['--repo', 'o/r', '--', 'true'] }));
-  expect(lines).toContain(`l2b: no .l2b.json found from ${ctx.cwd}; nothing set up or installed (see l2b init)`);
+  expect(lines).toContain(`l2b: no .l2b.json found from ${ctx.cwd}, so the box has a bare checkout with nothing set up or installed; if the work needs a toolchain or dependencies, run \`l2b init\` here and fill in setup and install`);
 });
 
 test('the hint stays quiet with a .l2b.json, with repos.<o/r> install, or without a repo', async () => {

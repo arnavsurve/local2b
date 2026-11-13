@@ -162,10 +162,10 @@ test('a failed token chain gives the preset hint and no values', async () => {
     ],
   };
   await expect(resolveHostToken({ ...github, token: failing })).rejects.toThrow(
-    'no GitHub token: set GH_TOKEN or run `gh auth login`'
+    'no GitHub token: GH_TOKEN and GITHUB_TOKEN are not set and `gh auth token` printed none. Only the user can fix this: tell them to run `gh auth login` once'
   );
   await expect(resolveHostToken({ ...gitlab, token: failing })).rejects.toThrow(
-    'no GitLab token: set GITLAB_TOKEN or run `glab auth login`'
+    'no GitLab token: GITLAB_TOKEN is not set and `glab auth token` printed none. Only the user can fix this: tell them to run `glab auth login` once'
   );
   await expect(resolveHostToken({ ...generic, token: failing })).rejects.toThrow(
     'L2B_TEST_UNSET'

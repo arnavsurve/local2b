@@ -177,7 +177,7 @@ export function createE2bMachineHost({
 
     async connect({ name }) {
       const info = await findInfo({ name });
-      if (!info) throw new Error(`no sandbox named "${name}" (try: l2b ls)`);
+      if (!info) throw new Error(`no sandbox named "${name}"; start one with \`l2b up ${name}\`, or list running boxes with \`l2b ls\``);
       const sandbox = await Sandbox.connect(info.sandboxId, {
         apiKey: await apiKey(),
         timeoutMs: idle.ms,

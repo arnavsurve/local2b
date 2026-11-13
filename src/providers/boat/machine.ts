@@ -166,7 +166,7 @@ export function createBoatHosts({ config, idle }: { config: Config['boat']; idle
 
   async function requireSandbox({ name }: { name: string }) {
     const sandbox = await findSandbox({ name });
-    if (!sandbox) throw new Error(`no sandbox named "${name}" (try: l2b ls)`);
+    if (!sandbox) throw new Error(`no sandbox named "${name}"; start one with \`l2b up ${name}\`, or list running boxes with \`l2b ls\``);
     return sandbox;
   }
 
@@ -238,7 +238,7 @@ export function createBoatHosts({ config, idle }: { config: Config['boat']; idle
       const created = await retryStarts(() => boatCall({ what: 'create', call: () => client.create(request) })).catch(
         (err: unknown) => {
           if (image === BASE_SNAPSHOT && isNotFound(err)) {
-            throw new Error(`no ${BASE_SNAPSHOT} bake found (boat keeps one at least 14 days); run \`l2b image build --provider boat\``);
+            throw new Error(`the ${BASE_SNAPSHOT} base image is gone (boat keeps it at least 14 days); run the same command again and l2b rebuilds it first`);
           }
           throw err;
         }
@@ -333,7 +333,12 @@ export function createBoatHosts({ config, idle }: { config: Config['boat']; idle
     const script = baseImageScript(config);
     if (script === null) throw new Error('nothing to build: boat.aptPackages and boat.imageCommands are empty');
     const name = 'l2b-image-build';
-    if (await findSandbox({ name })) throw new Error(`stale image box "${name}" exists; run: l2b down ${name}`);
+    const leftover = await findSandbox({ name });
+    if (leftover) {
+      step(`removing box "${name}" left by an earlier image build`);
+      const client = await api();
+      await boatCall({ what: 'delete', call: () => client.deleteSandbox({ sandboxId: leftover.id, xAsciiConfirmDelete: leftover.id }) });
+    }
     step(`creating image box "${name}"`);
     const machine = await create({ name, image: STOCK_IMAGE, workdir: HOME_DIR, idleMs: idle.ms, bake: BASE_SNAPSHOT });
     await runChecked({ box: machine, cwd: HOME_DIR, what: `image build (sandbox ${name} left up for inspection)`, cmd: script });
