@@ -38,7 +38,7 @@ You need [Bun](https://bun.sh), an API key for your provider, and `gh` (or `GH_T
 - `creds <name> [--repo o/r]`: re-push credentials.
 - `bake <o/r> [--install cmd] [--warm cmd] [--branch b] [--if-older-than 12h]`: build the repo snapshot.
 - `image build`: build the base image.
-- `install`: put `l2b` on PATH and link the agent skill.
+- `install`: install the agent skill into `~/.agents/skills/l2b` and `~/.claude/skills/l2b`. From a checkout it links the skill and puts `l2b` on PATH; a released binary writes the skill files.
 
 Use `run` for one-off work. Use `up`, `exec` and `down` when several commands need the same checkout, or you want a dev server behind a `url`.
 

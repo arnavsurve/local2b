@@ -81,7 +81,7 @@ export const COMMAND_HELP = {
   },
   install: {
     usage: 'l2b install',
-    summary: 'put l2b on PATH and link the agent skill',
+    summary: 'install the agent skill (from a checkout, also put l2b on PATH)',
     flags: [],
   },
   url: {
