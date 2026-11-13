@@ -7,7 +7,7 @@ import { describeInstall, resolveInstall } from './install';
 import { checkoutDir, mirrorDir, snapshotName } from './layout';
 import type { Machine, MachineHost } from './machine';
 import { putFile } from './files';
-import { configureGit, configureGitIdentity, pushEnv, runChecked, scrubCreds, withEnv, writeCredentials } from './session';
+import { configureGit, configureGitIdentity, pushEnv, runChecked, runSetup, scrubCreds, withEnv, writeCredentials } from './session';
 
 /**
  * The snapshot-and-mirror workflow over a `MachineHost`: a bake is a
@@ -58,6 +58,7 @@ async function checkout({
     });
   } else {
     step('no baked snapshot for this repo, cloning (slow; run `l2b bake` once to speed this up)');
+    await runSetup({ box: machine, setup: repo.setup, failureNote: null });
     await runChecked({
       box: machine,
       cwd: machine.homeDir,
@@ -143,6 +144,7 @@ export function machineWorkflow({ host }: { host: MachineHost }): Provider {
     await writeCredentials({ box: machine, credentials });
     await pushEnv({ box: machine, env: repo.env });
     if (credentials.git) await configureGit({ box: machine, host: credentials.git });
+    await runSetup({ box: machine, setup: repo.setup, failureNote: `(sandbox ${bakeName} left up for inspection)` });
     console.log(`clone strategy: ${repo.clone.strategy}`);
     step('cloning and installing dependencies (several minutes)');
     const dir = checkoutDir({ homeDir: machine.homeDir, repo: slug });

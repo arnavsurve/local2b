@@ -32,6 +32,7 @@ const repo: RepoSpec = {
   remoteUrl: 'https://github.com/o/widgets.git',
   baseBranch: null,
   clone: { strategy: 'mirror', depth: 50, filter: 'blob:limit=50m' },
+  setup: [],
   install: null,
   warm: null,
   env: {},
@@ -205,6 +206,47 @@ test('bake scrubs credentials before the snapshot and records when it happened',
   expect(executed.at(-1)).toBe('rm -f /dev/shm/l2b.env');
   expect([...alive]).toEqual([]);
   expect((await workflow.bakedAt({ repo }))?.getTime()).toBe(result.bakedAt.getTime());
+});
+
+const positions = ({ executed, marks }: { executed: string[]; marks: string[] }) =>
+  marks.map((mark) => executed.findIndex((cmd) => cmd.includes(mark)));
+
+test('setup runs in order before the clone and install, at bake and on a start without a snapshot', async () => {
+  const { provider, workflow, executed } = setup({ homeDir: '/home/user', execExitCode: 0 });
+  const withSetup: RepoSpec = { ...repo, setup: ['setup-one', 'setup-two'], install: 'make deps' };
+  const marks = ['setup-one', 'setup-two', 'git clone', 'make deps'];
+  const restore = quiet();
+  try {
+    await workflow.start({ ...startOpts, repo: withSetup });
+    const fresh = positions({ executed, marks });
+    expect(fresh.every((at) => at >= 0)).toBe(true);
+    expect(fresh).toEqual([...fresh].sort((a, b) => a - b));
+
+    executed.length = 0;
+    await workflow.bake({ repo: withSetup, credentials, image: null });
+    const baked = positions({ executed, marks });
+    expect(baked.every((at) => at >= 0)).toBe(true);
+    expect(baked).toEqual([...baked].sort((a, b) => a - b));
+
+    await seedSnapshot({ host: provider });
+    executed.length = 0;
+    await workflow.start({ ...startOpts, name: 'from-snapshot', repo: withSetup });
+    expect(executed.join('\n')).not.toContain('setup-one');
+    expect(executed.join('\n')).toContain('make deps');
+  } finally {
+    restore();
+  }
+});
+
+test('a failing setup command fails the start and names the command', async () => {
+  const { workflow, alive } = setup({ homeDir: '/home/user', execExitCode: 3 });
+  const restore = quiet();
+  try {
+    await expect(workflow.start({ ...startOpts, repo: { ...repo, setup: ['setup-one'] } })).rejects.toThrow('setup "setup-one" failed (exit 3)');
+  } finally {
+    restore();
+  }
+  expect([...alive]).toEqual([]);
 });
 
 test('bake refuses to run while a stale bake box exists', async () => {

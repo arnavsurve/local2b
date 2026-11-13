@@ -45,6 +45,7 @@ export function repoSpecFor({
     remoteUrl: remoteUrl({ host: hostFor({ config, repo }), repo }),
     baseBranch: baseBranch ?? own?.baseBranch ?? null,
     clone: resolveClone({ config, repo }),
+    setup: own?.setup ?? [],
     install: install ?? own?.install ?? null,
     warm: warm ?? own?.warm ?? null,
     env: own?.env ?? {},

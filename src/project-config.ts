@@ -34,6 +34,8 @@ export const projectConfigSchema = z.strictObject({
   env: z.record(z.string(), z.string()).default({}),
   provider: z.string().min(1).nullable().default(null),
   gitHost: gitHostSchema.nullable().default(null),
+  /** Toolchain commands run as the box user (sudo available) before the clone, at bake and on a start without a bake. */
+  setup: z.array(z.string().min(1)).default([]),
   /** Runs in the checkout on every start and at bake; keep it incremental. */
   install: z.string().nullable().default(null),
   /** Runs once at bake, after install. */
@@ -91,6 +93,7 @@ export function withProjectConfig({
         clone: { ...own.clone, ...project.clone },
         gitHost: project.gitHost ?? own.gitHost,
         baseBranch: project.baseBranch ?? own.baseBranch,
+        setup: project.setup.length > 0 ? project.setup : own.setup,
         install: project.install ?? own.install,
         warm: project.warm ?? own.warm,
         env: { ...own.env, ...project.env },

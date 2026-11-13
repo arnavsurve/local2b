@@ -1,3 +1,4 @@
+import { BAKE_CONFIG_CHANGED, bakeConfigState } from './bake-config';
 import type { Context } from './context';
 import { resolveCredentials } from './credentials';
 import { resolveGitIdentity } from './git-identity';
@@ -38,15 +39,19 @@ export async function startOptsFor({
   };
 }
 
-/** Prints the re-bake hint when the box will start from a bake older than `staleSnapshotHours`. */
+/**
+ * Prints the re-bake hint when the box will start from a bake older than
+ * `staleSnapshotHours`, or one made with other repo settings.
+ */
 export async function warnIfStale({ ctx, start }: { ctx: Context; start: StartOpts }) {
   if (!start.repo || start.source !== 'bake') return;
-  const hint = staleSnapshotHint({
-    repo: `${start.repo.owner}/${start.repo.name}`,
-    createdAt: await ctx.provider.bakedAt({ repo: start.repo }),
-    now: new Date(),
-    thresholdHours: ctx.config.staleSnapshotHours,
-  });
+  const repo = `${start.repo.owner}/${start.repo.name}`;
+  const createdAt = await ctx.provider.bakedAt({ repo: start.repo });
+  if (!createdAt) return;
+  if ((await bakeConfigState({ provider: ctx.provider.id, repo: start.repo })) === 'changed') {
+    console.error(`l2b: ${BAKE_CONFIG_CHANGED}; run l2b bake ${repo}`);
+  }
+  const hint = staleSnapshotHint({ repo, createdAt, now: new Date(), thresholdHours: ctx.config.staleSnapshotHours });
   if (hint) console.error(`l2b: ${hint}`);
 }
 

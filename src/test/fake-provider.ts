@@ -56,7 +56,8 @@ const repoKey = (repo: RepoSpec) => `${repo.owner}/${repo.name}`;
 /**
  * In-memory provider standing in for the remote edge (the one boundary we
  * don't own). Each box is a temp directory and commands run in a real local
- * bash, so checkouts and installs are real. Credentials live only in this
+ * bash, so checkouts, setup and installs are real. A bake keeps the checkout
+ * and the home its setup prepared. Credentials live only in this
  * process's memory and reach commands as environment variables. Idle expiry
  * follows the injected clock: a box idle past its window is gone on the next
  * call. Terminals are unsupported. `failure` makes every call fail the way a
@@ -65,7 +66,7 @@ const repoKey = (repo: RepoSpec) => `${repo.owner}/${repo.name}`;
 export function fakeProvider({ id, clock, failure }: { id: string; clock: FakeClock; failure: FakeFailure }) {
   const root = mkdtempSync(join(tmpdir(), `l2b-fake-${id}-`));
   const boxes = new Map<string, FakeBox>();
-  const bakes = new Map<string, { dir: string; at: Date }>();
+  const bakes = new Map<string, { home: string; dir: string; at: Date }>();
   /** Every command line run, as a provider-side history would keep it. */
   const history: string[] = [];
   let prepared = 0;
@@ -144,7 +145,10 @@ export function fakeProvider({ id, clock, failure }: { id: string; clock: FakeCl
     extra: string | null;
   }) {
     if (seed) cpSync(seed, dir, { recursive: true });
-    else await checked({ what: 'git clone', cmd: `git clone --quiet "$L2B_REMOTE" "$L2B_DIR"`, cwd: root, env: { ...env, L2B_REMOTE: repo.remoteUrl, L2B_DIR: dir } });
+    for (const cmd of seed ? [] : repo.setup) {
+      await checked({ what: `setup "${cmd}"`, cmd, cwd: env.HOME ?? root, env });
+    }
+    if (!seed) await checked({ what: 'git clone', cmd: `git clone --quiet "$L2B_REMOTE" "$L2B_DIR"`, cwd: root, env: { ...env, L2B_REMOTE: repo.remoteUrl, L2B_DIR: dir } });
     await checked({ what: 'branch checkout', cmd: SWITCH_SCRIPT, cwd: dir, env: { ...env, L2B_BRANCH: branch ?? '' } });
     for (const cmd of [repo.install, extra]) {
       if (cmd) await checked({ what: 'install', cmd, cwd: dir, env });
@@ -215,19 +219,20 @@ export function fakeProvider({ id, clock, failure }: { id: string; clock: FakeCl
     },
     async bake({ repo, credentials }) {
       guard();
-      const dir = join(root, 'bakes', repo.owner, repo.name);
-      const bakeHome = join(root, 'bake-home', repo.owner, repo.name);
-      rmSync(dir, { recursive: true, force: true });
-      mkdirSync(join(dir, '..'), { recursive: true });
-      mkdirSync(bakeHome, { recursive: true });
+      const base = join(root, 'bakes', repo.owner, repo.name);
+      const home = join(base, 'home');
+      const dir = join(base, 'checkout');
+      rmSync(base, { recursive: true, force: true });
+      mkdirSync(home, { recursive: true });
       try {
-        const env = envFor({ home: bakeHome, tmp: bakeHome, env: repo.env, credentials });
+        const env = envFor({ home, tmp: home, env: repo.env, credentials });
         await prepareCheckout({ repo, dir, env, seed: null, branch: repo.baseBranch, extra: repo.warm });
-      } finally {
-        rmSync(bakeHome, { recursive: true, force: true });
+      } catch (err) {
+        rmSync(base, { recursive: true, force: true });
+        throw err;
       }
       const at = new Date(clock.now());
-      bakes.set(repoKey(repo), { dir, at });
+      bakes.set(repoKey(repo), { home, dir, at });
       return { summary: `${id}:${repoKey(repo)}`, bakedAt: at };
     },
     async bakedAt({ repo }) {
@@ -258,6 +263,8 @@ export function fakeProvider({ id, clock, failure }: { id: string; clock: FakeCl
         state: 'running',
       };
       boxes.set(name, box);
+      const bake = repo && source === 'bake' ? (bakes.get(repoKey(repo)) ?? null) : null;
+      if (bake) cpSync(bake.home, home, { recursive: true });
       try {
         if (gitIdentity) {
           await checked({
@@ -268,8 +275,7 @@ export function fakeProvider({ id, clock, failure }: { id: string; clock: FakeCl
           });
         }
         if (repo) {
-          const bake = source === 'bake' ? (bakes.get(repoKey(repo))?.dir ?? null) : null;
-          await prepareCheckout({ repo, dir: box.workdir, env: envFor(box), seed: bake, branch, extra: null });
+          await prepareCheckout({ repo, dir: box.workdir, env: envFor(box), seed: bake?.dir ?? null, branch, extra: null });
         }
       } catch (err) {
         remove(box);
@@ -355,6 +361,7 @@ export async function fakeContractSubject(): Promise<ContractSubject> {
       remoteUrl: origin.remoteUrl,
       baseBranch: null,
       clone: { strategy: 'plain', depth: null, filter: null },
+      setup: [],
       install: null,
       warm: null,
       env: {},

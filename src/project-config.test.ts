@@ -64,11 +64,13 @@ test('the project file wins over repos.<o/r>, which wins over globals; unset key
         env: { A: 'user', B: 'user' },
         clone: { strategy: 'plain' },
         provider: 'p1',
+        setup: ['user setup'],
       },
     },
   });
   const project = projectConfigSchema.parse({
     install: 'project install',
+    setup: ['project setup'],
     warm: null,
     env: { B: 'project' },
     clone: { filter: null },
@@ -83,6 +85,7 @@ test('the project file wins over repos.<o/r>, which wins over globals; unset key
     remoteUrl: 'https://gitlab.com/o/r.git',
     baseBranch: 'develop',
     clone: { strategy: 'plain', depth: 20, filter: null },
+    setup: ['project setup'],
     install: 'project install',
     warm: 'user warm',
     env: { A: 'user', B: 'project' },
@@ -93,6 +96,8 @@ test('the project file wins over repos.<o/r>, which wins over globals; unset key
     { type: 'env', names: ['USER_SECRET'] },
     { type: 'env', names: ['PROJECT_SECRET'] },
   ]);
+  const inherited = withProjectConfig({ config, repo: 'o/r', project: projectConfigSchema.parse({ setup: [] }) });
+  expect(repoSpecFor({ config: inherited, repo: 'o/r', install: null, warm: null, baseBranch: null }).setup).toEqual(['user setup']);
   const flags = repoSpecFor({ config: merged, repo: 'o/r', install: 'flag', warm: null, baseBranch: 'main' });
   expect([flags.install, flags.baseBranch]).toEqual(['flag', 'main']);
 });

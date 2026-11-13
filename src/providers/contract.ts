@@ -32,6 +32,11 @@ const VAR = 'L2B_CONTRACT_VAR';
 /** Writes the length of a credential, never its value, so the install provably saw credentials. */
 const INSTALL = `printf '%s' "\${#${VAR}}" > ${INSTALL_MARKER}`;
 
+const TOOL_DIR = '~/.l2b-contract-tool';
+/** Counts its own runs and leaves a tool that only exists after it ran. */
+const SETUP = `mkdir -p ${TOOL_DIR} && echo run >> ${TOOL_DIR}/runs && printf '#!/bin/sh\\necho tool-ok\\n' > ${TOOL_DIR}/tool && chmod +x ${TOOL_DIR}/tool`;
+const TOOL_OUTPUT = '.l2b-contract-tool-output';
+
 const uniqueName = (prefix: string) => `${prefix}-${randomBytes(3).toString('hex')}`;
 
 async function capture({ box, cmd, cwd }: { box: Box; cmd: string; cwd: string | null }) {
@@ -287,6 +292,42 @@ export function describeProviderContract({
       };
       await fromBake({ branch: subject.branch, ref: `refs/heads/${subject.branch}` });
       await fromBake({ branch: uniqueName('l2b-contract-new'), ref: 'HEAD' });
+    }, timeoutMs);
+
+    test('setup runs before install without a bake and at bake, and a start from the bake keeps its result', async () => {
+      const withSetup = (): RepoSpec => ({
+        ...repo(),
+        setup: [SETUP],
+        install: `${TOOL_DIR}/tool > ${TOOL_OUTPUT}`,
+      });
+      const startBox = (source: 'bake' | 'fresh') =>
+        subject.provider.start({
+          name: uniqueName('contract'),
+          repo: withSetup(),
+          branch: subject.branch,
+          source,
+          image: null,
+          idle: subject.idle,
+          credentials: credentials({ value: canary }),
+          gitIdentity: null,
+        });
+      const expectTool = async ({ box, runs }: { box: Box; runs: number }) => {
+        expect(await stdoutOf({ box, cmd: `cat ${TOOL_OUTPUT}` })).toBe('tool-ok');
+        expect(await stdoutOf({ box, cmd: `wc -l < ${TOOL_DIR}/runs | tr -d ' '` })).toBe(String(runs));
+      };
+      const fresh = await startBox('fresh');
+      try {
+        await expectTool({ box: fresh, runs: 1 });
+      } finally {
+        await fresh.destroy();
+      }
+      await subject.provider.bake({ repo: withSetup(), credentials: credentials({ value: canary }), image: null });
+      const baked = await startBox('bake');
+      try {
+        await expectTool({ box: baked, runs: 1 });
+      } finally {
+        await baked.destroy();
+      }
     }, timeoutMs);
 
     const runOnce = ({ cmd, onOutput }: { cmd: string; onOutput: (o: ExecOutput) => void }) => {

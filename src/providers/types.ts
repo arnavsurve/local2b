@@ -26,6 +26,12 @@ export type RepoSpec = {
   /** Branch a bake is made from; null for the remote's default branch. */
   baseBranch: string | null;
   clone: CloneSpec;
+  /**
+   * Shell commands that prepare the toolchain, run in order as the box user
+   * (sudo available) in its home before the clone: at bake, and on a start
+   * that has no bake to start from. A start from a bake keeps their result.
+   */
+  setup: string[];
   /** Runs in the checkout at bake and on every start. null: detect it from the checkout. "": install nothing. */
   install: string | null;
   /** Runs in the checkout at bake only; null for none. */
