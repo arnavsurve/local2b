@@ -11,7 +11,7 @@ export type BakeNeed = 'missing' | 'stale' | 'changed' | 'toolchain-changed' | '
 
 /**
  * Decides from the bake's age and the settings it was made with. A bake of
- * unknown age counts as missing. `unrecorded`: the bake predates l2b noting
+ * unknown age counts as missing; the provider still starts from it if it has one. `unrecorded`: the bake predates l2b noting
  * its settings, so a re-bake records them.
  */
 export function bakeNeed({
@@ -44,7 +44,7 @@ export function bakeNeed({
 function describeNeed({ need, repo, bakedAt, now }: { need: Exclude<BakeNeed, null>; repo: string; bakedAt: Date | null; now: Date }) {
   switch (need) {
     case 'missing':
-      return `no bake of ${repo} yet; this box starts without one`;
+      return `no current bake of ${repo}`;
     case 'stale': {
       const age = bakedAt ? formatAge({ hours: (now.getTime() - bakedAt.getTime()) / 3_600_000 }) : 'unknown';
       return `the bake of ${repo} is ${age} old; this box starts from it`;

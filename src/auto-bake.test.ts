@@ -92,7 +92,7 @@ test('the first start of a repo without a bake starts fresh and leaves a bake ru
   const { ctx, bakedAt } = await setup({ bakeAgeHours: null });
   const said = await stderrOf(() => up({ ctx, args: ['first'] }));
   expect(await startedFromBake({ ctx, name: 'first' })).toBe(false);
-  expect(said).toContain(`no bake of o/r yet; this box starts without one. Baking in the background for later boxes (log: ${bakeLogPath(target)})`);
+  expect(said).toContain(`no current bake of o/r. Baking in the background for later boxes (log: ${bakeLogPath(target)})`);
   const holder = await bakeLockHolder(target);
   expect(holder?.pid).not.toBe(process.pid);
   expect(holder?.log).toBe(bakeLogPath(target));
