@@ -12,6 +12,7 @@ import { run } from './commands/run';
 import { shell } from './commands/shell';
 import { install } from './commands/install';
 import { up } from './commands/up';
+import { update } from './commands/update';
 import { url } from './commands/url';
 import { createContext, type Command } from './context';
 import { commandHelp, isCommandName, rootHelp, wantsHelp, type CommandName } from './help';
@@ -30,6 +31,7 @@ const commands: Record<CommandName, Command> = {
   put,
   shell,
   install,
+  update,
   creds,
   url,
   ls,

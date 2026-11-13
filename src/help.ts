@@ -84,6 +84,11 @@ export const COMMAND_HELP = {
     summary: 'install the agent skill (from a checkout, also put l2b on PATH)',
     flags: [],
   },
+  update: {
+    usage: 'l2b update',
+    summary: 'replace this binary with the latest release and refresh the skill',
+    flags: [],
+  },
   url: {
     usage: 'l2b url <name> <port>',
     summary: 'public URL for a port',
