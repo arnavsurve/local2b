@@ -7,7 +7,7 @@ Run heavy repo work on remote sandboxes instead of your laptop: typechecks, test
 
     l2b run --repo my-org/my-repo --branch feature/x -- yarn test
 
-That starts a box, checks out the branch with dependencies installed, runs the command, destroys the box, and hands you the exit code.
+That starts a box, checks out the branch, runs the project's setup and install from `.l2b.json`, runs the command, destroys the box, and hands you the exit code. Inside a checkout, `--repo` and `--branch` default to that checkout's.
 
 ## What it does
 
@@ -41,11 +41,14 @@ You need an API key for your provider and `gh` (or `GH_TOKEN`). A secret source 
     mkdir -p ~/.config/l2b
     curl -fsSL https://raw.githubusercontent.com/arnavsurve/local2b/main/config.example.json -o ~/.config/l2b/config.json
     l2b image build             # once
-    l2b bake my-org/my-repo     # once per repo
-    l2b run --repo my-org/my-repo --branch main -- yarn test
+    cd ~/src/my-repo
+    l2b init                    # once per repo; then set setup and install in .l2b.json
+    l2b bake                    # once per repo
+    l2b run -- yarn test
 
 ## Commands
 
+- `init`: write a starter `.l2b.json` in the current directory. See Project config.
 - `run [--repo o/r] [--branch b] [--keep] -- <cmd...>`: one-shot. Create a box, run the command, destroy the box. Exit code passes through.
 - `up <name> [--repo o/r] [--branch b] [--full] [--doppler p/c] [--image ref]`: create a box and check out a branch.
 - `exec <name> [--cwd dir] [--detach] -- <cmd...>`: run a command in a box. Defaults to the repo checkout. With `--detach` the command starts in the background and `exec` prints a job id at once.
@@ -56,10 +59,12 @@ You need an API key for your provider and `gh` (or `GH_TOKEN`). A secret source 
 - `down <name>`, `pause <name>`, `ls`: lifecycle.
 - `url <name> <port>`: public URL for a port.
 - `creds <name> [--repo o/r]`: re-push credentials.
-- `bake <o/r> [--install cmd] [--warm cmd] [--branch b] [--if-older-than 12h]`: build the repo snapshot.
+- `bake [o/r] [--install cmd] [--warm cmd] [--branch b] [--if-older-than 12h]`: build the repo snapshot.
 - `image build`: build the base image.
 - `update`: replace the binary with the latest release and refresh the skill.
 - `install`: install the agent skill into `~/.agents/skills/l2b` and `~/.claude/skills/l2b`. From a checkout it links the skill and puts `l2b` on PATH; a released binary writes the skill files.
+
+`run`, `up`, `bake` and `creds` take the repo from the checkout in the current directory when `--repo` is not given. See Repo and branch from the checkout.
 
 Use `run` for one-off work. Use `up`, `exec` and `down` when several commands need the same checkout, or you want a dev server behind a `url`.
 
@@ -69,9 +74,60 @@ Detached jobs suit long commands such as full test suites, which would otherwise
 
 Each provider runs this workflow with its own primitives. The description below is the shared toolkit's snapshot-and-mirror workflow, which e2b uses.
 
-An **image** holds tooling only: git, gh, a language runtime and whatever else you configure. `l2b image build` makes it once. A **snapshot** is a per-repo disk capture on top of that image, made by `l2b bake`: a shallow mirror, a checkout, installed dependencies, and any codegen from `warm`. A **box** is a sandbox started from the snapshot. `up` pushes credentials, switches the checkout to your branch, and runs `install` incrementally.
+An **image** holds tooling only: git, gh, a language runtime and whatever else you configure. `l2b image build` makes it once. A **snapshot** is a per-repo disk capture on top of that image, made by `l2b bake`: whatever `setup` installed, a shallow mirror, a checkout, installed dependencies, and any codegen from `warm`. A **box** is a sandbox started from the snapshot. `up` pushes credentials, switches the checkout to your branch, and runs `install` incrementally. Without a snapshot, `up` runs `setup`, clones, then runs `install`.
 
 Boxes expire 15 minutes after the last l2b activity, with no local process needed; each provider documents how it guarantees that. Push a branch to keep work.
+
+## Project config
+
+A project describes its environment in `.l2b.json`. l2b uses the nearest one, looking in the current directory and then each parent up to the filesystem root. Commit it to share it, or keep it untracked in a parent directory to cover every checkout below it.
+
+`l2b init` writes a starter file in the current directory with every key. In a checkout it fills in `repo` and `baseBranch`. It does not overwrite an existing file.
+
+    {
+      "repo": "my-org/my-service",
+      "baseBranch": "main",
+      "setup": [
+        "curl -fsSL https://go.dev/dl/go1.24.5.linux-amd64.tar.gz | sudo tar -C /usr/local -xz",
+        "sudo ln -sf /usr/local/go/bin/go /usr/local/go/bin/gofmt /usr/local/bin/"
+      ],
+      "install": "go mod download",
+      "warm": null,
+      "env": {},
+      "secrets": [],
+      "clone": {},
+      "provider": null,
+      "gitHost": null
+    }
+
+| Key | Meaning |
+| --- | --- |
+| `repo` | `owner/name` the file is for. A command for another repo fails while this file is the nearest. Outside a checkout it supplies `--repo` |
+| `setup` | Shell commands that install the toolchain. They run in order as the box user (sudo is available) in its home, before the clone: at bake, and on a start without a snapshot. A start from a snapshot keeps their result |
+| `install` | Runs in the checkout at bake and on every start. Keep it incremental |
+| `warm` | Runs once at bake, after `install` |
+| `baseBranch` | Branch the snapshot is baked from |
+| `env` | Plain, non-secret variables set in every box |
+| `secrets` | Secret sources added to the user config's. See Secret sources |
+| `clone` | `strategy`, `depth` and `filter`, as in Config |
+| `provider` | Provider for this repo |
+| `gitHost` | Git host for this repo. See Git hosts |
+
+`null`, `{}` and `[]` leave a key to the user config. Unknown keys are an error that names the file.
+
+Settings resolve in this order: command-line flags, the nearest `.l2b.json`, `repos.<o/r>` in the user config, then the user config's globals. Provider settings (API keys, image features, box size) live in the user config only.
+
+Each command runs in a non-login shell, so put tools on the default `PATH`, for example by linking them into `/usr/local/bin`.
+
+With no `.l2b.json` and no `install` in `repos.<o/r>`, nothing is set up or installed, and `up`, `run` and `bake` say so on stderr. A command in `run` or `exec` that exits 127 (command not found) prints a pointer to `setup`.
+
+`secrets` and a `generic` `gitHost` can name commands, which l2b runs on your machine. Use l2b only under `.l2b.json` files you trust.
+
+### Repo and branch from the checkout
+
+Without `--repo`, `run`, `up`, `bake` and `creds` use the git checkout in the current directory. `owner/name` comes from its `origin` remote, matched against the git host. An `origin` on another host is an error that asks for `--repo`. Outside a checkout, `repo` from `.l2b.json` is used.
+
+Without `--branch`, `run` and `up` use the checkout's current branch. The box fetches that branch from the remote, so l2b prints one line when the branch is not on `origin` or has unpushed commits. `bake` uses `baseBranch`, not the current branch.
 
 ## Credentials
 
@@ -109,7 +165,7 @@ A command reference trims one trailing newline and fails on empty output. Tools 
 
 ## Config
 
-`$L2B_CONFIG`, else `~/.config/l2b/config.json`. Every key has a default. See `config.example.json`.
+`$L2B_CONFIG`, else `~/.config/l2b/config.json`. Every key has a default. See `config.example.json`. `repos.<o/r>` is the fallback for repos without a `.l2b.json`; see Project config.
 
 | Key | Default | Meaning |
 | --- | --- | --- |
@@ -126,20 +182,17 @@ A command reference trims one trailing newline and fails on empty output. Tools 
 | `cloneDepth` | none | Kept for compatibility; the global default for `clone.depth`. Prefer `clone.depth` |
 | `staleSnapshotHours` | `72` | `up` and `run` hint to re-bake past this age |
 | `repos.<o/r>.baseBranch` | repo default | Branch the snapshot is baked from |
-| `repos.<o/r>.install` | detected from lockfile | Runs on every `up` and at bake. Keep it incremental. `""` runs nothing |
+| `repos.<o/r>.setup` | `[]` | Toolchain commands; see `setup` in Project config |
+| `repos.<o/r>.install` | none | Runs on every `up` and at bake. Keep it incremental. `""` runs nothing |
 | `repos.<o/r>.warm` | none | Runs at bake only (codegen, builds). Output ships in the snapshot |
 | `repos.<o/r>.env` | `{}` | Plain, non-secret variables set in every box for this repo |
 | `repos.<o/r>.gitHost` | global | Per-repo override |
 | `repos.<o/r>.provider` | global `provider` | Provider used for this repo |
 | `repos.<o/r>.clone` | global | Per-repo override of `strategy`, `depth` and `filter`. Unset fields inherit |
 
-`baseBranch`, `warm` and `clone` apply on the next `l2b bake`, which prints the strategy it used. `up` follows what the snapshot contains: it uses a baked mirror if one exists and otherwise fetches in place, so changing the strategy never breaks an existing snapshot. `--full` on `up` or `run` clones without a snapshot at full depth and keeps the filter.
+`setup`, `baseBranch`, `warm` and `clone` apply on the next `l2b bake`, which prints the strategy it used. `up` follows what the snapshot contains: it uses a baked mirror if one exists and otherwise fetches in place, so changing the strategy never breaks an existing snapshot. `--full` on `up` or `run` clones without a snapshot at full depth and keeps the filter.
 
 Use `plain` for small repos. A mirror pays off when the repo is large and boxes switch branches often; for a small repo it adds a second copy and nothing else.
-
-### Install detection
-
-When `install` is not set, `l2b` looks at the checkout root and picks a command: `bun.lock` or `bun.lockb` runs `bun install --frozen-lockfile`, `pnpm-lock.yaml` runs `pnpm install --frozen-lockfile`, `yarn.lock` runs `yarn install --immutable` (with `.yarnrc.yml`) or `yarn install --frozen-lockfile`, `package-lock.json` runs `npm ci`, and a bare `package.json` runs `npm install`. The first match in that order wins. Detection covers JavaScript only. For other ecosystems set `install` yourself; with no match, nothing is installed. A configured string always wins, and `""` disables installing.
 
 ## Providers
 
@@ -212,9 +265,13 @@ GitHub is the default. `baseUrl` points a preset at GitHub Enterprise Server or 
 
 A stale snapshot makes `up` slower. `bake --if-older-than` skips the work when the snapshot is recent, so a scheduled job can call it often:
 
-    0 3 * * * l2b bake my-org/my-repo --if-older-than 20h
+    0 3 * * * cd ~/src/my-repo && l2b bake --if-older-than 20h
+
+Run it from the checkout, so the bake sees the same `.l2b.json` as your other commands.
 
 l2b records bake times in `$XDG_STATE_HOME/l2b/bakes.json`. A snapshot baked elsewhere has no known age.
+
+`bake` also records a hash of the settings it used (`setup`, `install`, `warm`, `baseBranch`, `clone`, `env`) in `$XDG_STATE_HOME/l2b/bake-configs.json`. When they differ, `up` and `run` print `project config changed since the bake`, and `bake --if-older-than` bakes again even if the snapshot is recent.
 
 l2b records the boxes it starts, with their repo, branch and last activity, in `$XDG_STATE_HOME/l2b/boxes.json`. `down` removes an entry, and entries unused for three days are dropped.
 
@@ -225,8 +282,8 @@ A provider gets the workflow done with its own primitives. Core says what it wan
 1. Implement `Provider` and `Box` from `src/providers/types.ts`. The doc comments there state the functionality expectations: what `start` delivers, how credentials must be handled, and that boxes expire on their own.
 2. Throw `UnsupportedError` for anything the provider cannot do. l2b prints its message as it comes.
 3. Keep provider policy in the adapter and its own config block: what pause keeps, ssh or pty, snapshots, image builds, lifetime caps.
-4. Reuse `src/toolkit/` if it fits. It has git scripts, install detection, the credential env file, the file write behind `put`, the heartbeat, local bake records, the base recipe and `machineWorkflow`, which turns low-level machine primitives into a `Provider`. Nothing requires it.
-5. Pass the contract suite. Add a test that calls `describeProviderContract({ name, makeProvider, timeoutMs })` from `src/providers/contract.ts`. It covers the branch checkout with dependencies installed, exec exit codes and streams, background processes outliving exec, `put`, the git identity, credentials reaching commands and never being persisted, bakes, run-once cleanup, idle expiry and `UnsupportedError`. Gate a real-provider run behind an environment variable, as `src/providers/e2b/contract.test.ts` does with `L2B_CONTRACT_E2B=1`.
+4. Reuse `src/toolkit/` if it fits. It has git scripts, the setup runner, the credential env file, the file write behind `put`, the heartbeat, local bake records, the base recipe and `machineWorkflow`, which turns low-level machine primitives into a `Provider`. Nothing requires it.
+5. Pass the contract suite. Add a test that calls `describeProviderContract({ name, makeProvider, timeoutMs })` from `src/providers/contract.ts`. It covers the branch checkout with dependencies installed, setup ordering, exec exit codes and streams, background processes outliving exec, `put`, the git identity, credentials reaching commands and never being persisted, bakes, run-once cleanup, idle expiry and `UnsupportedError`. Gate a real-provider run behind an environment variable, as `src/providers/e2b/contract.test.ts` does with `L2B_CONTRACT_E2B=1`.
 6. Register the provider in `src/providers/index.ts` and `src/providers/ids.ts`, add its config block to `src/config.ts`, and give it a README section.
 
 ## Development
