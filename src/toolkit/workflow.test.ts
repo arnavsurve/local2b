@@ -190,6 +190,25 @@ test('bake scrubs credentials before the snapshot and records when it happened',
   expect((await workflow.bakedAt({ repo }))?.getTime()).toBe(result.bakedAt.getTime());
 });
 
+test('bakes names the repo and age from the local record, and deleteBake removes the snapshot and the record', async () => {
+  const { workflow, snapshots } = setup({ homeDir: '/home/user', execExitCode: 0 });
+  const restore = quiet();
+  const result = await workflow.bake({ repo, credentials, image: null });
+  restore();
+  snapshots.add('l2b-made-elsewhere');
+  expect(await workflow.bakes()).toEqual([
+    { repo: 'o/widgets', name: snapshotName('o/widgets'), id: 'snap', createdAt: result.bakedAt },
+    { repo: null, name: 'l2b-made-elsewhere', id: 'snap', createdAt: null },
+  ]);
+
+  expect(await workflow.deleteBake({ repo })).toBe(true);
+  expect([...snapshots]).toEqual(['l2b-made-elsewhere']);
+  snapshots.add(snapshotName('o/widgets'));
+  expect(await workflow.bakedAt({ repo })).toBeNull();
+  snapshots.clear();
+  expect(await workflow.deleteBake({ repo })).toBe(false);
+});
+
 const positions = ({ executed, marks }: { executed: string[]; marks: string[] }) =>
   marks.map((mark) => executed.findIndex((cmd) => cmd.includes(mark)));
 

@@ -83,6 +83,14 @@ export function fakeMachineHost({
       guard();
       return snapshots.has(name) ? { id: 'snap', createdAt: null } : null;
     },
+    async listSnapshots() {
+      guard();
+      return [...snapshots].map((name) => ({ name, id: 'snap', createdAt: null }));
+    },
+    async deleteSnapshot({ name }) {
+      guard();
+      return snapshots.delete(name);
+    },
     buildImage: async () => 'fake-image',
   };
 

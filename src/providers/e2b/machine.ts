@@ -5,7 +5,7 @@ import { withHeartbeat } from '../../toolkit/keepalive';
 import type { Config } from '../../config';
 import { resolveValue, type ValueRef } from '../../secrets';
 import { devTemplate } from './template';
-import { snapshotHasName } from './snapshot-match';
+import { l2bSnapshotName, snapshotHasName } from './snapshot-match';
 
 const NAME_KEY = 'l2b';
 const WORKDIR_KEY = 'l2b_workdir';
@@ -127,6 +127,16 @@ export function createE2bMachineHost({
     }
   };
 
+  /** Every snapshot on the account, page by page. */
+  async function allSnapshots() {
+    const paginator = Sandbox.listSnapshots({ apiKey: await apiKey() });
+    const found = [];
+    do {
+      found.push(...(await paginator.nextItems()));
+    } while (paginator.hasNext);
+    return found;
+  }
+
   async function findInfo({ name }: { name: string }) {
     const paginator = Sandbox.list({
       apiKey: await apiKey(),
@@ -190,15 +200,22 @@ export function createE2bMachineHost({
     },
 
     async findSnapshot({ name }) {
-      const paginator = Sandbox.listSnapshots({ apiKey: await apiKey() });
-      do {
-        for (const snapshot of await paginator.nextItems()) {
-          if (snapshotHasName({ names: snapshot.names, name })) {
-            return { id: snapshot.snapshotId, createdAt: null };
-          }
-        }
-      } while (paginator.hasNext);
-      return null;
+      const snapshot = (await allSnapshots()).find((s) => snapshotHasName({ names: s.names, name }));
+      return snapshot ? { id: snapshot.snapshotId, createdAt: null } : null;
+    },
+
+    async listSnapshots() {
+      return (await allSnapshots()).flatMap((snapshot) => {
+        const name = l2bSnapshotName({ names: snapshot.names });
+        return name ? [{ name, id: snapshot.snapshotId, createdAt: null }] : [];
+      });
+    },
+
+    async deleteSnapshot({ name }) {
+      const matching = (await allSnapshots()).filter((s) => snapshotHasName({ names: s.names, name }));
+      const key = await apiKey();
+      for (const snapshot of matching) await Sandbox.deleteSnapshot(snapshot.snapshotId, { apiKey: key });
+      return matching.length > 0;
     },
 
     async buildImage() {

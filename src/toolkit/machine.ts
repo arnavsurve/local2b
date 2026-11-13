@@ -73,6 +73,10 @@ export type MachineHost = {
    * `createdAt` is null when the host can't report it.
    */
   findSnapshot(opts: { name: string }): Promise<{ id: string; createdAt: Date | null } | null>;
+  /** Every repo snapshot l2b made on this host, by the name it was made with. */
+  listSnapshots(): Promise<{ name: string; id: string; createdAt: Date | null }[]>;
+  /** Deletes every snapshot named `name`; resolves with whether there was one. */
+  deleteSnapshot(opts: { name: string }): Promise<boolean>;
   /** Builds the tooling-only base image and returns its reference. */
   buildImage(): Promise<string>;
 };

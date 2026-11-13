@@ -63,6 +63,17 @@ export type BakeResult = {
   bakedAt: Date;
 };
 
+/** A bake kept on a provider. */
+export type BakeSummary = {
+  /** `owner/name`, or null when the provider cannot tell which repo it was made for. */
+  repo: string | null;
+  /** The provider's name for the bake. */
+  name: string;
+  id: string;
+  /** null when the age is unknown. */
+  createdAt: Date | null;
+};
+
 export type StartOpts = {
   /** Unique among the provider's live boxes. */
   name: string;
@@ -161,6 +172,14 @@ export type Provider = {
   bake(opts: { repo: RepoSpec; credentials: Credentials; image: string | null }): Promise<BakeResult>;
   /** When the repo's current bake was made, or null when there is none or its age is unknown. */
   bakedAt(opts: { repo: RepoSpec }): Promise<Date | null>;
+  /** Every repo bake l2b made on this provider, with the repo it is for when known. */
+  bakes(): Promise<BakeSummary[]>;
+  /**
+   * Removes the repo's bake and the provider's local records of it, and
+   * resolves with whether a bake existed. Afterwards the bake is no longer
+   * listed, `bakedAt` is null, and a start with `source: 'bake'` starts fresh.
+   */
+  deleteBake(opts: { repo: RepoSpec }): Promise<boolean>;
   start(opts: StartOpts): Promise<Box>;
   connect(opts: { name: string }): Promise<Box>;
   exists(opts: { name: string }): Promise<boolean>;

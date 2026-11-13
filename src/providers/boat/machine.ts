@@ -21,6 +21,7 @@ import {
   forkRequest,
   isExpiredBox,
   newestBake,
+  repoBakes,
   exitCodeOf,
   inDirCommand,
   nameFilter,
@@ -310,6 +311,17 @@ export function createBoatHosts({ config, idle }: { config: Config['boat']; idle
       const bake = savedSnapshotName({ name });
       const found = await findBake({ bake });
       return found ? { id: bake, createdAt: found.stoppedAt } : null;
+    },
+    listSnapshots: async () => repoBakes({ sandboxes: await stopped({ label: undefined }) }),
+    /** Deletes the bake and every older stopped box kept under its name. */
+    async deleteSnapshot({ name }) {
+      const bake = savedSnapshotName({ name });
+      const kept = await stopped({ label: bakeFilter({ bake }) });
+      const client = await api();
+      for (const sandbox of kept) {
+        await boatCall({ what: 'delete', call: () => client.deleteSandbox({ sandboxId: sandbox.id, xAsciiConfirmDelete: sandbox.id }) });
+      }
+      return newestBake({ sandboxes: kept, bake }) !== null;
     },
     buildImage: () => buildBase(),
   };

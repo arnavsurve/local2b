@@ -239,6 +239,15 @@ export function fakeProvider({ id, clock, failure }: { id: string; clock: FakeCl
       guard();
       return bakes.get(repoKey(repo))?.at ?? null;
     },
+    async bakes() {
+      guard();
+      return [...bakes].map(([repo, { at }]) => ({ repo, name: repo, id: `${id}:${repo}`, createdAt: at }));
+    },
+    async deleteBake({ repo }) {
+      guard();
+      rmSync(join(root, 'bakes', repo.owner, repo.name), { recursive: true, force: true });
+      return bakes.delete(repoKey(repo));
+    },
     async start({ name, repo, branch, source, idle, credentials, gitIdentity }) {
       guard();
       expireIdle();

@@ -34,13 +34,25 @@ export function bakeConfigHash({ repo }: { repo: RepoSpec }) {
   return createHash('sha256').update(JSON.stringify(settings)).digest('hex');
 }
 
+async function writeRecords(records: Record<string, string>) {
+  const path = recordsPath();
+  await mkdir(dirname(path), { recursive: true });
+  await Bun.write(path, JSON.stringify(records, null, 2));
+}
+
 /** Notes the settings `repo`'s latest bake on `provider` was made with. */
 export async function recordBakeConfig({ provider, repo }: { provider: string; repo: RepoSpec }) {
   const records = await readRecords();
   records[key({ provider, repo })] = bakeConfigHash({ repo });
-  const path = recordsPath();
-  await mkdir(dirname(path), { recursive: true });
-  await Bun.write(path, JSON.stringify(records, null, 2));
+  await writeRecords(records);
+}
+
+/** Drops the settings record of `repo`'s bake on `provider`, once that bake is gone. */
+export async function forgetBakeConfig({ provider, repo }: { provider: string; repo: RepoSpec }) {
+  const records = await readRecords();
+  if (!Object.hasOwn(records, key({ provider, repo }))) return;
+  delete records[key({ provider, repo })];
+  await writeRecords(records);
 }
 
 /**

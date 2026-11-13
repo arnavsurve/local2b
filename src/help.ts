@@ -32,16 +32,22 @@ export const COMMAND_HELP = {
     flags: SHARED_FLAGS,
   },
   bake: {
-    usage: 'l2b bake [owner/repo] [--if-older-than 12h]',
+    usage: 'l2b bake [owner/repo] [--if-older-than 12h] [--delete]',
     summary: 'build the per-repo snapshot (bare mirror + warm install)',
     flags: [
       ['--if-older-than 12h', 'skip when the existing snapshot is newer'],
+      ['--delete', "delete the repo's bake on the selected provider instead"],
       ['--branch b', 'branch to warm'],
       ['--doppler project/config', 'doppler secrets to load into the box'],
       ['--image ref', 'base image override'],
       ['--install cmd', 'install command override'],
       ['--warm cmd', 'command run after install to warm caches'],
     ],
+  },
+  bakes: {
+    usage: 'l2b bakes',
+    summary: 'bakes on every configured provider: repo, provider, id, age',
+    flags: [],
   },
   init: {
     usage: 'l2b init',

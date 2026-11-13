@@ -1,7 +1,7 @@
 import { step } from '../progress';
 import type { Box, Provider, RepoSpec, StartOpts, Terminal } from '../providers/types';
 import { shellQuote } from '../shell';
-import { lookupSnapshot, recordBake } from './bake-records';
+import { forgetBake, lookupSnapshot, recordBake, recordedBakes } from './bake-records';
 import { bakeScript, cloneCommand, switchScript } from './git-scripts';
 import { checkoutDir, mirrorDir, snapshotName } from './layout';
 import type { Machine, MachineHost } from './machine';
@@ -178,10 +178,33 @@ export function machineWorkflow({ host }: { host: MachineHost }): Provider {
     return { summary: snapshotId, bakedAt };
   }
 
+  /** The host knows snapshot names only; the repo and, failing the host, the age come from local bake records. */
+  async function bakes() {
+    const [snapshots, records] = await Promise.all([host.listSnapshots(), recordedBakes({ provider: host.id })]);
+    return snapshots.map((snapshot) => {
+      const record = records.find((r) => snapshotName(r.repo) === snapshot.name) ?? null;
+      return {
+        repo: record?.repo ?? null,
+        name: snapshot.name,
+        id: snapshot.id,
+        createdAt: snapshot.createdAt ?? record?.at ?? null,
+      };
+    });
+  }
+
+  async function deleteBake({ repo }: { repo: RepoSpec }) {
+    const slug = slugOf(repo);
+    const deleted = await host.deleteSnapshot({ name: snapshotName(slug) });
+    await forgetBake({ provider: host.id, repo: slug });
+    return deleted;
+  }
+
   return {
     id: host.id,
     prepare: async () => `built image ${await host.buildImage()}`,
     bake,
+    bakes,
+    deleteBake,
     bakedAt: async ({ repo }) => (await lookupSnapshot({ provider: host, repo: slugOf(repo) }))?.createdAt ?? null,
     start,
     connect: async ({ name }) => asBox({ name, machine: await host.connect({ name }) }),

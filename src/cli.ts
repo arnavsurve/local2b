@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 import { touchConnectedBoxes } from './box-records';
 import { bake } from './commands/bake';
+import { bakes } from './commands/bakes';
 import { creds } from './commands/creds';
 import { exec } from './commands/exec';
 import { down, pause } from './commands/lifecycle';
@@ -26,6 +27,7 @@ const commands: Record<CommandName, Command> = {
   up,
   image,
   bake,
+  bakes,
   init,
   exec,
   logs,
