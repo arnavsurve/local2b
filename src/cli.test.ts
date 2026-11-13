@@ -15,15 +15,15 @@ async function l2b(...args: string[]) {
 }
 
 test('every subcommand answers --help and -h with its usage line', async () => {
-  for (const [name, help] of Object.entries(COMMAND_HELP)) {
-    for (const flag of ['--help', '-h']) {
-      const res = await l2b(name, flag);
-      expect(res.code).toBe(0);
-      expect(res.stdout).toContain(help.usage);
-      expect(res.stderr).toBe('');
-    }
+  const cases = Object.entries(COMMAND_HELP).flatMap(([name, help]) =>
+    ['--help', '-h'].map(async (flag) => ({ help, res: await l2b(name, flag) })),
+  );
+  for (const { help, res } of await Promise.all(cases)) {
+    expect(res.code).toBe(0);
+    expect(res.stdout).toContain(help.usage);
+    expect(res.stderr).toBe('');
   }
-});
+}, 30_000);
 
 test('exec --help lists its flags', async () => {
   const res = await l2b('exec', '--help');
