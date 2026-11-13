@@ -69,7 +69,7 @@ Anything not pushed is lost when the box expires. Do not try to sync files back 
 
 ## Cleanup is automatic
 
-`run` always cleans up after itself. Other boxes expire on their own after a period with no `l2b` activity (default 15 minutes), and every `exec` or `shell` holds that off while it runs. You do not need to remember to shut them down. Run `l2b down <name>` when you are finished to stop early and save cost. Background processes (dev servers) only survive while the box is alive: a box with no `l2b` calls against it will eventually expire, so call `l2b exec <name> -- true` to extend it.
+`run` always cleans up after itself. Other boxes expire on their own after a period with no `l2b` activity (default 15 minutes), and every `exec` or `shell` holds that off while it runs. You do not need to remember to shut them down. Run `l2b down <name>` when you are finished to stop early and save cost. Background processes (dev servers) only survive while the box is alive: a box with no `l2b` calls against it will eventually expire, so call `l2b exec <name> -- true` to extend it. During long local work between calls, keep a box alive by running any cheap `l2b exec <name> -- true` before the idle window runs out, or use `l2b run` for one-shot commands so there is no box to keep.
 
 ## Secrets
 
@@ -85,5 +85,6 @@ If `l2b` is not on the PATH, run `bun <path-to-local2b>/src/cli.ts install` once
 
 ## Troubleshooting
 
-- `no sandbox named ...`: it expired or was never created. Run `l2b ls`, then `l2b up` again.
+- `box "<name>" expired: ...`: the box idled out between `l2b` calls. Run the `l2b up` command the message prints.
+- `no sandbox named ...`: l2b has no record of starting that box here, so it was never created or was started elsewhere. Run `l2b ls`, then `l2b up` if it is missing.
 - `up` falls back to a slow shallow clone when no baked snapshot exists for the repo. Ask the user to run `l2b bake <owner/repo>` once.

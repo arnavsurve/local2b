@@ -1,4 +1,5 @@
 import { parseArgs } from 'node:util';
+import { recordBoxStart } from '../box-records';
 import { requirePositional } from '../args';
 import { selectForRepo, type Command } from '../context';
 import { COMMAND_HELP } from '../help';
@@ -31,6 +32,14 @@ export const up: Command = async ({ ctx: base, args }) => {
   });
   await warnIfStale({ ctx, start });
   const box = await ctx.provider.start(start);
+  await recordBoxStart({
+    provider: ctx.provider.id,
+    name,
+    repo: values.repo ?? null,
+    branch: values.branch ?? null,
+    idleMinutes: ctx.config.idle.minutes,
+    at: new Date(),
+  });
   console.log(
     [
       `${name} ready`,

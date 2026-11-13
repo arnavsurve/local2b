@@ -133,7 +133,7 @@ An unknown id fails and lists the known ones. Snapshots and bake times are kept 
 
 Each provider has its own config block with its own API key, such as `e2b` below. A provider counts as configured when its block is present, it is the default, or its API key resolves. With no block, that means its default variable is set, such as `E2B_API_KEY`.
 
-`exec`, `shell`, `url`, `down`, `pause` and `creds` address a box by name. With `--provider` they use that provider. Without it they look the name up on every configured provider at once. One match is used. No match gives a "no sandbox named" error that lists the providers searched. A name on several providers fails and asks for `--provider`. A provider with no usable API key is skipped in this lookup, but an explicit `--provider` for it fails and names the key to set.
+`exec`, `shell`, `url`, `down`, `pause` and `creds` address a box by name. With `--provider` they use that provider. Without it they look the name up on every configured provider at once. One match is used. No match gives a "no sandbox named" error that lists the providers searched. A box l2b started from this machine that has since expired gets a "box expired" error with the time of its last l2b activity and the `up` command that starts it again. A name on several providers fails and asks for `--provider`. A provider with no usable API key is skipped in this lookup, but an explicit `--provider` for it fails and names the key to set.
 
 `ls` lists boxes from every configured provider, with the provider id in the last column. A provider that fails prints one warning on stderr and the rest still list.
 
@@ -194,6 +194,8 @@ A stale snapshot makes `up` slower. `bake --if-older-than` skips the work when t
     0 3 * * * l2b bake my-org/my-repo --if-older-than 20h
 
 l2b records bake times in `$XDG_STATE_HOME/l2b/bakes.json`. A snapshot baked elsewhere has no known age.
+
+l2b records the boxes it starts, with their repo, branch and last activity, in `$XDG_STATE_HOME/l2b/boxes.json`. `down` removes an entry, and entries unused for three days are dropped.
 
 ## Adding a provider
 

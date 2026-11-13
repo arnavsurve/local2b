@@ -1,4 +1,5 @@
 import { parseArgs } from 'node:util';
+import { recordBoxStart } from '../box-records';
 import { joinCommand, splitOnDoubleDash } from '../args';
 import { selectForRepo, type Command } from '../context';
 import { usageError } from '../help';
@@ -45,5 +46,14 @@ export const run: Command = async ({ ctx: base, args }) => {
     after: values.keep ? 'keep' : 'destroy',
     onOutput: toProcess,
   });
-  if (values.keep) console.error(`l2b: box kept: ${name} (l2b exec ${name} -- <cmd>, l2b down ${name})`);
+  if (!values.keep) return;
+  await recordBoxStart({
+    provider: ctx.provider.id,
+    name,
+    repo,
+    branch: values.branch ?? null,
+    idleMinutes: ctx.config.idle.minutes,
+    at: new Date(),
+  });
+  console.error(`l2b: box kept: ${name} (l2b exec ${name} -- <cmd>, l2b down ${name})`);
 };

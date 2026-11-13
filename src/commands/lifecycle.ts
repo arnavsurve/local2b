@@ -1,6 +1,7 @@
 import { requirePositional } from '../args';
 import type { Command } from '../context';
-import { connectBox } from '../find-box';
+import { forgetBox } from '../box-records';
+import { connectBox, findBoxProvider } from '../find-box';
 import { COMMAND_HELP } from '../help';
 
 export const pause: Command = async ({ ctx, args }) => {
@@ -11,6 +12,8 @@ export const pause: Command = async ({ ctx, args }) => {
 
 export const down: Command = async ({ ctx, args }) => {
   const name = requirePositional({ positionals: args, index: 0, usage: COMMAND_HELP.down.usage });
-  await (await connectBox({ ctx, name })).destroy();
+  const provider = await findBoxProvider({ ctx, name });
+  await (await provider.connect({ name })).destroy();
+  await forgetBox({ provider: provider.id, name });
   console.log(`${name}: destroyed`);
 };

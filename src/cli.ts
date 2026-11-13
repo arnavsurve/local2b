@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+import { touchConnectedBoxes } from './box-records';
 import { bake } from './commands/bake';
 import { creds } from './commands/creds';
 import { exec } from './commands/exec';
@@ -52,7 +53,11 @@ async function main() {
     console.log(commandHelp(name));
     return;
   }
-  await commands[name]({ ctx: await createContext({ flag: providerId }), args });
+  try {
+    await commands[name]({ ctx: await createContext({ flag: providerId }), args });
+  } finally {
+    await touchConnectedBoxes({ at: new Date() });
+  }
 }
 
 main().catch((err) => {
