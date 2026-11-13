@@ -27,7 +27,9 @@ gh pr create --base main --head "$branch" --title "chore: release $tag" --body "
 
 until [[ $(gh pr view "$branch" --json statusCheckRollup -q '.statusCheckRollup | length') -gt 0 ]]; do sleep 3; done
 gh pr checks "$branch" --watch --fail-fast
-gh pr merge "$branch" --squash --admin --delete-branch
+# No --delete-branch: gh would then switch to the local main, which fails when main is checked out in another worktree.
+gh pr merge "$branch" --squash --admin
+git push --quiet origin --delete "$branch"
 
 git fetch --quiet origin main
 git show origin/main:package.json | grep -q "\"version\": \"$version\"" ||
