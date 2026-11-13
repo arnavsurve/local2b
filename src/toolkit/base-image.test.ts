@@ -114,3 +114,13 @@ test('a bake made on an older base image has no age, so it is made again', async
   expect(await workflow.bakedAt({ repo })).not.toBeNull();
   expect(image.builds).toBe(1);
 });
+
+test('starts racing on a missing image build it once, even on a host that lists an image while it builds', async () => {
+  const { workflow, image, alive } = setup();
+  image.built = false;
+  image.listedWhileBuilding = true;
+  const said = await stderrOf(() => Promise.all([workflow.start(startOpts({ image: null })), Bun.sleep(5).then(() => workflow.start(startOpts({ image: null })))]));
+  expect(image.builds).toBe(1);
+  expect(alive.size).toBe(2);
+  expect(said).not.toContain('using the existing base image');
+});

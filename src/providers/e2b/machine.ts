@@ -229,7 +229,12 @@ export function createE2bMachineHost({
     imageRecipe: () =>
       JSON.stringify({ dockerfile: Template.toDockerfile(template()), cpuCount: config.cpuCount, memoryMB: config.memoryMB }),
 
-    imageExists: async () => Template.exists(config.template, { apiKey: await apiKey() }),
+    /** A template is listed as soon as its first build starts; its `default` tag appears once a build is done. */
+    async imageExists() {
+      const key = await apiKey();
+      if (!(await Template.exists(config.template, { apiKey: key }))) return false;
+      return (await Template.getTags(config.template, { apiKey: key })).some((t) => t.tag === 'default');
+    },
 
     async buildImage() {
       await Template.build(template(), config.template, {

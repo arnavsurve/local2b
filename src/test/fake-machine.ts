@@ -12,7 +12,8 @@ type FakeFailure = 'auth' | 'network' | null;
  * unreachable API would.
  *
  * The base image starts out built from `recipe-1`; `image` lets a test
- * delete it or change the recipe, and counts builds. Creating a machine from
+ * delete it or change the recipe, and counts builds. A build takes a moment;
+ * `listedWhileBuilding` makes the image look present while it builds. Creating a machine from
  * the default image fails while it is not built.
  */
 export function fakeMachineHost({
@@ -30,7 +31,7 @@ export function fakeMachineHost({
   const executed: string[] = [];
   const files = new Map<string, string>();
   const snapshots = new Set<string>();
-  const image = { recipe: 'recipe-1', built: true, builds: 0 };
+  const image = { recipe: 'recipe-1', built: true, builds: 0, building: false, listedWhileBuilding: false };
 
   const guard = () => {
     if (failure === 'auth') throw new ProviderAuthError({ provider: id, hint: `set ${id.toUpperCase()}_API_KEY` });
@@ -100,10 +101,13 @@ export function fakeMachineHost({
     imageRecipe: () => image.recipe,
     async imageExists() {
       guard();
-      return image.built;
+      return image.built || (image.building && image.listedWhileBuilding);
     },
     async buildImage() {
       guard();
+      image.building = true;
+      await Bun.sleep(20);
+      image.building = false;
       image.built = true;
       image.builds += 1;
       return 'fake-image';
