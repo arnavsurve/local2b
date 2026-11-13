@@ -1,21 +1,7 @@
 {
   "provider": "e2b",
-  "gitHost": { "type": "github" },
-  "gitIdentity": { "name": "Your Name", "email": "you@example.com" },
-  "clone": { "strategy": "mirror", "depth": 50, "filter": "blob:limit=50m" },
-  "secrets": [{ "type": "doppler", "project": "my-project", "config": "dev" }],
-  "repos": {
-    "my-org/my-repo": { "install": "yarn install" },
-    "my-org/small-repo": { "clone": { "strategy": "plain", "depth": null, "filter": null } }
-  },
   "e2b": {
-    "apiKey": { "from": "doppler", "project": "my-project", "config": "dev", "name": "E2B_API_KEY" },
-    "cpuCount": 8,
-    "memoryMB": 16384,
-    "features": ["node", "gh", "doppler", "docker", "postgres", "redis", "ripgrep", "tmux"],
-    "nodeMajor": 24,
-    "npmGlobals": [],
-    "aptPackages": [],
-    "imageCommands": []
-  }
+    "apiKey": { "from": "env", "name": "E2B_API_KEY" }
+  },
+  "secrets": []
 }
