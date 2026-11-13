@@ -12,7 +12,6 @@ const WORKDIR_KEY = 'l2b_workdir';
 const HOME_DIR = '/home/user';
 const HEARTBEATS_PER_IDLE_WINDOW = 3;
 const BUILD_REQUEST_TIMEOUT_MS = 30 * 60 * 1000;
-const IMAGE_NAME = 'l2b-dev';
 const LIVE_STATES: ('running' | 'paused')[] = ['running', 'paused'];
 
 function wrapBox({
@@ -146,10 +145,19 @@ export function createE2bMachineHost({
     return items[0] ?? null;
   }
 
+  const template = () =>
+    devTemplate({
+      features: config.features,
+      nodeMajor: config.nodeMajor,
+      npmGlobals: config.npmGlobals,
+      aptPackages: config.aptPackages,
+      imageCommands: config.imageCommands,
+    });
+
   return {
     id: 'e2b',
     homeDir: HOME_DIR,
-    defaultImage: IMAGE_NAME,
+    defaultImage: config.template,
 
     async create({ name, image, workdir, idle: override }) {
       const policy = override ? { ...idle, ms: override.minutes * 60_000 } : idle;
@@ -218,20 +226,19 @@ export function createE2bMachineHost({
       return matching.length > 0;
     },
 
+    imageRecipe: () =>
+      JSON.stringify({ dockerfile: Template.toDockerfile(template()), cpuCount: config.cpuCount, memoryMB: config.memoryMB }),
+
+    imageExists: async () => Template.exists(config.template, { apiKey: await apiKey() }),
+
     async buildImage() {
-      await Template.build(devTemplate({
-          features: config.features,
-          nodeMajor: config.nodeMajor,
-          npmGlobals: config.npmGlobals,
-          aptPackages: config.aptPackages,
-          imageCommands: config.imageCommands,
-        }), IMAGE_NAME, {
+      await Template.build(template(), config.template, {
         apiKey: await apiKey(),
         cpuCount: config.cpuCount,
         memoryMB: config.memoryMB,
         requestTimeoutMs: BUILD_REQUEST_TIMEOUT_MS,
       });
-      return IMAGE_NAME;
+      return config.template;
     },
   };
 }

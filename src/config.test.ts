@@ -59,6 +59,15 @@ test('e2b image features default to everything and reject unknown names', async 
   await expect(loadConfig()).rejects.toThrow(/features/);
 });
 
+test('the e2b base image is named by e2b.template', async () => {
+  process.env.L2B_CONFIG = '/nonexistent/l2b.json';
+  expect((await loadConfig()).e2b.template).toBe('l2b-dev');
+  writeConfig(JSON.stringify({ e2b: { template: 'l2b-test' } }));
+  expect((await loadConfig()).e2b.template).toBe('l2b-test');
+  writeConfig(JSON.stringify({ e2b: { template: 'Not Valid' } }));
+  await expect(loadConfig()).rejects.toThrow(/template/);
+});
+
 test('npm globals need the node feature', async () => {
   writeConfig(JSON.stringify({ e2b: { features: ['gh'], npmGlobals: ['bun'] } }));
   await expect(loadConfig()).rejects.toThrow(/node/);

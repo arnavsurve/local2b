@@ -1,6 +1,7 @@
 import type { BoatApi, Sandbox } from '@boatdev/sdk';
 import type { Config } from '../../config';
 import { step } from '../../progress';
+import { buildBaseImage } from '../../toolkit/base-image';
 import { withHeartbeat } from '../../toolkit/keepalive';
 import type { Machine, MachineHost } from '../../toolkit/machine';
 import { runChecked, withEnv } from '../../toolkit/session';
@@ -323,6 +324,8 @@ export function createBoatHosts({ config, idle }: { config: Config['boat']; idle
       }
       return newestBake({ sandboxes: kept, bake }) !== null;
     },
+    imageRecipe: () => baseImageScript(config),
+    imageExists: async () => (await findBake({ bake: savedSnapshotName({ name: BASE_SNAPSHOT }) })) !== null,
     buildImage: () => buildBase(),
   };
 
@@ -372,7 +375,7 @@ export function createBoatHosts({ config, idle }: { config: Config['boat']; idle
       if (baseImageScript(config) === null) {
         return "boat's stock image is used as is; set boat.aptPackages or boat.imageCommands to add tools";
       }
-      return `kept bake ${await buildBase()} (boat keeps it at least 14 days)`;
+      return `kept bake ${await buildBaseImage({ host: boxes })} (boat keeps it at least 14 days)`;
     },
   };
 }

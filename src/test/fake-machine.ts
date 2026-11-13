@@ -10,6 +10,10 @@ type FakeFailure = 'auth' | 'network' | null;
  * machines are still alive afterwards.
  * `failure` makes every provider call fail the way a missing key or an
  * unreachable API would.
+ *
+ * The base image starts out built from `recipe-1`; `image` lets a test
+ * delete it or change the recipe, and counts builds. Creating a machine from
+ * the default image fails while it is not built.
  */
 export function fakeMachineHost({
   id,
@@ -26,6 +30,7 @@ export function fakeMachineHost({
   const executed: string[] = [];
   const files = new Map<string, string>();
   const snapshots = new Set<string>();
+  const image = { recipe: 'recipe-1', built: true, builds: 0 };
 
   const guard = () => {
     if (failure === 'auth') throw new ProviderAuthError({ provider: id, hint: `set ${id.toUpperCase()}_API_KEY` });
@@ -61,8 +66,9 @@ export function fakeMachineHost({
     id,
     homeDir,
     defaultImage: 'fake-image',
-    async create({ name, workdir }) {
+    async create({ name, image: ref, workdir }) {
       guard();
+      if (ref === 'fake-image' && !image.built) throw new Error('image fake-image not found');
       alive.add(name);
       return makeBox({ name, workdir });
     },
@@ -91,8 +97,18 @@ export function fakeMachineHost({
       guard();
       return snapshots.delete(name);
     },
-    buildImage: async () => 'fake-image',
+    imageRecipe: () => image.recipe,
+    async imageExists() {
+      guard();
+      return image.built;
+    },
+    async buildImage() {
+      guard();
+      image.built = true;
+      image.builds += 1;
+      return 'fake-image';
+    },
   };
 
-  return { provider, alive, executed, files, snapshots };
+  return { provider, alive, executed, files, snapshots, image };
 }

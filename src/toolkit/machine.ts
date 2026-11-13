@@ -77,6 +77,14 @@ export type MachineHost = {
   listSnapshots(): Promise<{ name: string; id: string; createdAt: Date | null }[]>;
   /** Deletes every snapshot named `name`; resolves with whether there was one. */
   deleteSnapshot(opts: { name: string }): Promise<boolean>;
+  /**
+   * Everything `buildImage` builds from, as text: a change to it means the
+   * base image is out of date. null when there is nothing to build and
+   * `defaultImage` is used as it is.
+   */
+  imageRecipe(): string | null;
+  /** Whether `defaultImage` exists on the host. */
+  imageExists(): Promise<boolean>;
   /** Builds the tooling-only base image and returns its reference. */
   buildImage(): Promise<string>;
 };

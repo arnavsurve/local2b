@@ -3,6 +3,7 @@ import { step } from '../../progress';
 import { bakeScript } from '../../toolkit/git-scripts';
 import { bakeBoxName, checkoutDir, mirrorDir, snapshotName } from '../../toolkit/layout';
 import { configureGit, pushEnv, runChecked, runSetup, scrubCreds, writeCredentials } from '../../toolkit/session';
+import { ensureBaseImage } from '../../toolkit/base-image';
 import { machineWorkflow } from '../../toolkit/workflow';
 import type { Box, Provider } from '../types';
 import { createBoatHosts } from './machine';
@@ -38,6 +39,7 @@ export function createBoatProvider({ config, idle }: { config: Config['boat']; i
       step(`removing box "${bakeName}" left by an earlier bake`);
       await (await hosts.boxes.connect({ name: bakeName })).destroy();
     }
+    if (image === null) await ensureBaseImage({ host: hosts.boxes });
     step(`creating bake box "${bakeName}"`);
     const machine = await hosts.startBake({ name: bakeName, bake: label, image: image ?? hosts.boxes.defaultImage });
     await writeCredentials({ box: machine, credentials });
