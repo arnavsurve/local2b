@@ -325,7 +325,9 @@ export function createBoatHosts({ config, idle }: { config: Config['boat']; idle
       return newestBake({ sandboxes: kept, bake }) !== null;
     },
     imageRecipe: () => baseImageScript(config),
-    imageExists: async () => (await findBake({ bake: savedSnapshotName({ name: BASE_SNAPSHOT }) })) !== null,
+    /** boat keeps one base image under its name, replaced only once a new build is stopped, so the name is the reference. */
+    imageExists: async ({ ref }) => (await findBake({ bake: savedSnapshotName({ name: ref }) })) !== null,
+    currentImage: async () => ((await findBake({ bake: savedSnapshotName({ name: BASE_SNAPSHOT }) })) ? BASE_SNAPSHOT : null),
     buildImage: () => buildBase(),
   };
 

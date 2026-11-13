@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { Sandbox, Template } from 'e2b';
 import { ProviderAuthError } from '../types';
 import type { IdlePolicy, Machine, MachineHost } from '../../toolkit/machine';
@@ -13,6 +14,17 @@ const HOME_DIR = '/home/user';
 const HEARTBEATS_PER_IDLE_WINDOW = 3;
 const BUILD_REQUEST_TIMEOUT_MS = 30 * 60 * 1000;
 const LIVE_STATES: ('running' | 'paused')[] = ['running', 'paused'];
+const PIN_TAG_PREFIX = 'l2b-';
+
+/** A tag unique to one build, so `<template>:<tag>` always means that build. */
+const newPinTag = () => `${PIN_TAG_PREFIX}${randomUUID()}`;
+const pinnedRef = ({ template, tag }: { template: string; tag: string }) => `${template}:${tag}`;
+
+/** The pin tag in `ref`, or null when `ref` is not a pinned build of `template`. */
+function pinTag({ template, ref }: { template: string; ref: string }) {
+  const prefix = `${template}:${PIN_TAG_PREFIX}`;
+  return ref.startsWith(prefix) ? ref.slice(template.length + 1) : null;
+}
 
 function wrapBox({
   sandbox,
@@ -229,21 +241,39 @@ export function createE2bMachineHost({
     imageRecipe: () =>
       JSON.stringify({ dockerfile: Template.toDockerfile(template()), cpuCount: config.cpuCount, memoryMB: config.memoryMB }),
 
-    /** A template is listed as soon as its first build starts; its `default` tag appears once a build is done. */
-    async imageExists() {
+    /** A tag names one build for good; the template's name follows whichever build e2b serves as `default`, which can lag a rebuild. */
+    async imageExists({ ref }) {
+      const tag = pinTag({ template: config.template, ref });
+      if (tag === null) return false;
       const key = await apiKey();
       if (!(await Template.exists(config.template, { apiKey: key }))) return false;
-      return (await Template.getTags(config.template, { apiKey: key })).some((t) => t.tag === 'default');
+      return (await Template.getTags(config.template, { apiKey: key })).some((t) => t.tag === tag);
+    },
+
+    /** `default` appears once a build is done. A build l2b did not tag (or tagged elsewhere) gets a tag here. */
+    async currentImage() {
+      const key = await apiKey();
+      if (!(await Template.exists(config.template, { apiKey: key }))) return null;
+      const tags = await Template.getTags(config.template, { apiKey: key });
+      const current = tags.find((t) => t.tag === 'default');
+      if (!current) return null;
+      const pinned = tags.find((t) => t.buildId === current.buildId && t.tag.startsWith(PIN_TAG_PREFIX));
+      if (pinned) return pinnedRef({ template: config.template, tag: pinned.tag });
+      const tag = newPinTag();
+      await Template.assignTags(`${config.template}:default`, tag, { apiKey: key });
+      return pinnedRef({ template: config.template, tag });
     },
 
     async buildImage() {
+      const tag = newPinTag();
       await Template.build(template(), config.template, {
         apiKey: await apiKey(),
+        tags: ['default', tag],
         cpuCount: config.cpuCount,
         memoryMB: config.memoryMB,
         requestTimeoutMs: BUILD_REQUEST_TIMEOUT_MS,
       });
-      return config.template;
+      return pinnedRef({ template: config.template, tag });
     },
   };
 }

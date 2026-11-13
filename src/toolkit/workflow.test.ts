@@ -261,7 +261,7 @@ test('bake replaces the box an earlier failed bake of the repo left up, and keep
 
 test('prepare builds the base image', async () => {
   const { workflow } = setup({ homeDir: '/home/user', execExitCode: 0 });
-  expect(await workflow.prepare()).toBe('built image fake-image');
+  expect(await workflow.prepare()).toBe('built image fake-image@1');
 });
 
 test('a start sets the git identity, and bake never does', async () => {

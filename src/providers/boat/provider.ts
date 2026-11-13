@@ -39,9 +39,9 @@ export function createBoatProvider({ config, idle }: { config: Config['boat']; i
       step(`removing box "${bakeName}" left by an earlier bake`);
       await (await hosts.boxes.connect({ name: bakeName })).destroy();
     }
-    if (image === null) await ensureBaseImage({ host: hosts.boxes });
+    const from = image ?? (await ensureBaseImage({ host: hosts.boxes }));
     step(`creating bake box "${bakeName}"`);
-    const machine = await hosts.startBake({ name: bakeName, bake: label, image: image ?? hosts.boxes.defaultImage });
+    const machine = await hosts.startBake({ name: bakeName, bake: label, image: from });
     await writeCredentials({ box: machine, credentials });
     await pushEnv({ box: machine, env: repo.env });
     if (credentials.git) await configureGit({ box: machine, host: credentials.git });
