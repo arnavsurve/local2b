@@ -116,12 +116,8 @@ test('a failed setup destroys the machine it created', async () => {
   expect([...alive]).toEqual([]);
 });
 
-const installRuns = ({ executed }: { executed: string[] }) =>
-  executed.filter((cmd) => /yarn|bun install|npm|pnpm/.test(cmd) && !cmd.includes('git '));
-
-async function withLockfiles({ snapshot }: { snapshot: boolean }) {
+async function onPath({ snapshot }: { snapshot: boolean }) {
   const fake = setup({ homeDir: '/srv/dan', execExitCode: 0 });
-  fake.rootFiles.push('package.json', 'yarn.lock', '.yarnrc.yml', 'src');
   if (snapshot) await seedSnapshot({ host: fake.provider });
   fake.executed.length = 0;
   return fake;
@@ -130,40 +126,26 @@ async function withLockfiles({ snapshot }: { snapshot: boolean }) {
 test.each([
   { path: 'snapshot', snapshot: true },
   { path: 'clone', snapshot: false },
-])('detects and runs the install command on the $path path', async ({ snapshot }) => {
-  const { workflow, executed } = await withLockfiles({ snapshot });
-  await workflow.start(startOpts);
-  expect(installRuns({ executed })).toContain(
-    'for f in /srv/dan/.l2b-env /dev/shm/l2b.env; do [ -f $f ] && . $f; done; yarn install --immutable'
-  );
-});
-
-test.each([
-  { path: 'snapshot', snapshot: true },
-  { path: 'clone', snapshot: false },
-])('a configured install overrides detection on the $path path', async ({ snapshot }) => {
-  const { workflow, executed } = await withLockfiles({ snapshot });
+])('the configured install runs in the checkout on the $path path', async ({ snapshot }) => {
+  const { workflow, executed } = await onPath({ snapshot });
   await workflow.start({ ...startOpts, repo: { ...repo, install: 'make deps' } });
-  expect(executed.some((cmd) => cmd.endsWith('; make deps'))).toBe(true);
-  expect(executed.join('\n')).not.toContain('yarn install');
+  expect(executed).toContain('for f in /srv/dan/.l2b-env /dev/shm/l2b.env; do [ -f $f ] && . $f; done; make deps');
 });
 
 test.each([
-  { path: 'snapshot', snapshot: true },
-  { path: 'clone', snapshot: false },
-])('an empty install runs nothing on the $path path', async ({ snapshot }) => {
-  const { workflow, executed } = await withLockfiles({ snapshot });
-  await workflow.start({ ...startOpts, repo: { ...repo, install: '' } });
-  expect(executed).not.toContain('ls -A');
-  expect(installRuns({ executed })).toEqual([]);
-});
-
-test('an unrecognised checkout installs nothing and still starts', async () => {
-  const { workflow, executed, rootFiles } = await withLockfiles({ snapshot: false });
-  rootFiles.length = 0;
-  rootFiles.push('go.mod');
-  await workflow.start(startOpts);
-  expect(installRuns({ executed })).toEqual([]);
+  { path: 'snapshot', snapshot: true, install: null },
+  { path: 'clone', snapshot: false, install: null },
+  { path: 'snapshot', snapshot: true, install: '' },
+  { path: 'clone', snapshot: false, install: '' },
+])('install $install runs nothing on the $path path', async ({ snapshot, install }) => {
+  const { workflow, executed } = await onPath({ snapshot });
+  const restore = quiet();
+  try {
+    await workflow.start({ ...startOpts, repo: { ...repo, install } });
+  } finally {
+    restore();
+  }
+  expect(executed.filter((cmd) => !/git |test -d|chmod|rm -f/.test(cmd))).toEqual([]);
 });
 
 async function sourcedEnv({ content, name }: { content: string; name: string }) {

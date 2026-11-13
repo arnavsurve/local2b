@@ -32,7 +32,7 @@ export type RepoSpec = {
    * that has no bake to start from. A start from a bake keeps their result.
    */
   setup: string[];
-  /** Runs in the checkout at bake and on every start. null: detect it from the checkout. "": install nothing. */
+  /** Runs in the checkout at bake and on every start. null or "": install nothing. */
   install: string | null;
   /** Runs in the checkout at bake only; null for none. */
   warm: string | null;

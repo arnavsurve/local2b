@@ -1,7 +1,6 @@
 import type { Config } from '../../config';
 import { step } from '../../progress';
 import { bakeScript } from '../../toolkit/git-scripts';
-import { describeInstall, resolveInstall } from '../../toolkit/install';
 import { checkoutDir, mirrorDir, snapshotName } from '../../toolkit/layout';
 import { configureGit, pushEnv, runChecked, runSetup, scrubCreds, writeCredentials } from '../../toolkit/session';
 import { machineWorkflow } from '../../toolkit/workflow';
@@ -63,9 +62,7 @@ export function createBoatProvider({ config, idle }: { config: Config['boat']; i
         filter: repo.clone.filter,
       }),
     });
-    const resolved = repo.install === '' ? null : await resolveInstall({ box: machine, dir, configured: repo.install });
-    if (repo.install !== '') step(describeInstall({ install: resolved }));
-    const prepare = [resolved?.command ?? null, repo.warm].filter((cmd) => cmd !== null);
+    const prepare = [repo.install, repo.warm].filter((cmd) => cmd !== null && cmd !== '');
     if (prepare.length > 0) {
       await runChecked({ box: machine, cwd: dir, what: `bake install ${inspect}`, cmd: prepare.join(' && ') });
     }

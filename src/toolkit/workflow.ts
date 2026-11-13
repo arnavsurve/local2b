@@ -3,7 +3,6 @@ import type { Box, Provider, RepoSpec, StartOpts, Terminal } from '../providers/
 import { shellQuote } from '../shell';
 import { lookupSnapshot, recordBake } from './bake-records';
 import { bakeScript, cloneCommand, switchScript } from './git-scripts';
-import { describeInstall, resolveInstall } from './install';
 import { checkoutDir, mirrorDir, snapshotName } from './layout';
 import type { Machine, MachineHost } from './machine';
 import { putFile } from './files';
@@ -26,12 +25,10 @@ async function existingMirror({ machine, repo }: { machine: Machine; repo: strin
   return code === 0 ? mirror : null;
 }
 
-async function installDependencies({ machine, dir, configured }: { machine: Machine; dir: string; configured: string | null }) {
-  if (configured === '') return;
-  const resolved = await resolveInstall({ box: machine, dir, configured });
-  step(describeInstall({ install: resolved }));
-  if (!resolved) return;
-  await runChecked({ box: machine, cwd: dir, what: 'install', cmd: resolved.command });
+async function installDependencies({ machine, dir, install }: { machine: Machine; dir: string; install: string | null }) {
+  if (!install) return;
+  step(`installing dependencies: ${install}`);
+  await runChecked({ box: machine, cwd: dir, what: 'install', cmd: install });
 }
 
 async function checkout({
@@ -66,7 +63,7 @@ async function checkout({
       cmd: cloneCommand({ remote: repo.remoteUrl, dir, branch, depth: repo.clone.depth, filter: repo.clone.filter }),
     });
   }
-  await installDependencies({ machine, dir, configured: repo.install });
+  await installDependencies({ machine, dir, install: repo.install });
 }
 
 async function attachShell({ machine, terminal, cwd }: { machine: Machine; terminal: Terminal; cwd: string | null }) {
@@ -163,9 +160,7 @@ export function machineWorkflow({ host }: { host: MachineHost }): Provider {
         filter: repo.clone.filter,
       }),
     });
-    const resolved = repo.install === '' ? null : await resolveInstall({ box: machine, dir, configured: repo.install });
-    if (repo.install !== '') step(describeInstall({ install: resolved }));
-    const prepare = [resolved?.command ?? null, repo.warm].filter((cmd) => cmd !== null);
+    const prepare = [repo.install, repo.warm].filter((cmd) => cmd !== null && cmd !== '');
     if (prepare.length > 0) {
       await runChecked({
         box: machine,

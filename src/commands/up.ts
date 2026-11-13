@@ -3,6 +3,7 @@ import { recordBoxStart } from '../box-records';
 import { requirePositional } from '../args';
 import type { Command } from '../context';
 import { COMMAND_HELP } from '../help';
+import { warnIfUnconfigured } from '../hints';
 import { startOptsFor, warnIfStale } from '../start';
 import { branchFor, resolveTarget } from '../target';
 
@@ -33,6 +34,7 @@ export const up: Command = async ({ ctx: base, args }) => {
     doppler: values.doppler ?? null,
     image: values.image ?? null,
   });
+  warnIfUnconfigured({ target, repo: start.repo });
   await warnIfStale({ ctx, start });
   const box = await ctx.provider.start(start);
   await recordBoxStart({

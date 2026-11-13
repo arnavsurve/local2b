@@ -3,6 +3,7 @@ import { recordBoxStart } from '../box-records';
 import { joinCommand, splitOnDoubleDash } from '../args';
 import type { Command } from '../context';
 import { usageError } from '../help';
+import { hintOnExit, warnIfUnconfigured } from '../hints';
 import { generatedBoxName, runOnce } from '../run-once';
 import { startOptsFor, toProcess, warnIfStale } from '../start';
 import { branchFor, resolveTarget } from '../target';
@@ -38,9 +39,10 @@ export const run: Command = async ({ ctx: base, args }) => {
     doppler: values.doppler ?? null,
     image: values.image ?? null,
   });
+  warnIfUnconfigured({ target, repo: start.repo });
   await warnIfStale({ ctx, start });
 
-  process.exitCode = await runOnce({
+  const exitCode = await runOnce({
     provider: ctx.provider,
     start,
     cmd: joinCommand(tail),
@@ -48,6 +50,8 @@ export const run: Command = async ({ ctx: base, args }) => {
     after: values.keep ? 'keep' : 'destroy',
     onOutput: toProcess,
   });
+  process.exitCode = exitCode;
+  hintOnExit({ exitCode });
   if (!values.keep) return;
   await recordBoxStart({
     provider: ctx.provider.id,
