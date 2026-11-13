@@ -250,12 +250,13 @@ test('a failing setup command fails the start and names the command', async () =
   expect([...alive]).toEqual([]);
 });
 
-test('bake refuses to run while a stale bake box exists', async () => {
-  const { provider, workflow } = setup({ homeDir: '/home/user', execExitCode: 0 });
-  await provider.create({ name: 'bake-widgets', image: 'i', workdir: '/w', idle: null });
-  await expect(workflow.bake({ repo, credentials, image: null })).rejects.toThrow(
-    'stale bake sandbox "bake-widgets" exists; run: l2b down bake-widgets'
-  );
+test('bake replaces the box an earlier failed bake of the repo left up, and keeps other repos\' bake boxes', async () => {
+  const { provider, workflow, alive, snapshots } = setup({ homeDir: '/home/user', execExitCode: 0 });
+  await provider.create({ name: 'bake-o-widgets', image: 'i', workdir: '/w', idle: null });
+  await provider.create({ name: 'bake-other-widgets', image: 'i', workdir: '/w', idle: null });
+  await workflow.bake({ repo, credentials, image: null });
+  expect([...alive]).toEqual(['bake-other-widgets']);
+  expect([...snapshots]).toEqual([snapshotName('o/widgets')]);
 });
 
 test('prepare builds the base image', async () => {

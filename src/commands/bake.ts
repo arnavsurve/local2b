@@ -1,11 +1,14 @@
 import { parseArgs } from 'node:util';
 import { BAKE_CONFIG_CHANGED, bakeConfigState, forgetBakeConfig, recordBakeConfig } from '../bake-config';
+import { clearBakeFailure, recordBakeFailure } from '../bake-failures';
+import { acquireBakeLock, bakeLockHolder, releaseBakeLock, type BakeLock } from '../bake-lock';
+import { BAKE_LOCK_TOKEN_ENV, BAKE_LOG_ENV } from '../background-bake';
 import { resolveCredentials } from '../credentials';
 import { parseDuration } from '../duration';
 import { repoSpecFor } from '../repo';
 import { COMMAND_HELP } from '../help';
 import type { Command, Context } from '../context';
-import type { RepoSpec } from '../providers/types';
+import { CommandFailedError, type RepoSpec } from '../providers/types';
 import { formatAge } from '../snapshots';
 import { resolveTarget } from '../target';
 import { warnIfUnconfigured } from '../hints';
@@ -49,7 +52,8 @@ export const bake: Command = async ({ ctx: base, args }) => {
   if (skipIfNewerThanMs !== null) {
     const bakedAt = await ctx.provider.bakedAt({ repo: spec });
     const ageMs = bakedAt ? Date.now() - bakedAt.getTime() : null;
-    const changed = (await bakeConfigState({ provider: ctx.provider.id, repo: spec })) === 'changed';
+    const state = await bakeConfigState({ provider: ctx.provider.id, repo: spec });
+    const changed = state === 'changed' || state === 'toolchain-changed';
     if (ageMs !== null && ageMs < skipIfNewerThanMs && !changed) {
       console.log(
         `snapshot for ${repo} is ${formatAge({ hours: ageMs / 3_600_000 })} old, newer than ${values['if-older-than']}; skipping bake`
@@ -58,14 +62,47 @@ export const bake: Command = async ({ ctx: base, args }) => {
     }
     if (ageMs !== null && changed) console.log(`${BAKE_CONFIG_CHANGED}; baking`);
   }
-  const result = await ctx.provider.bake({
-    repo: spec,
-    credentials: await resolveCredentials({ config: ctx.config, repo, doppler: values.doppler ?? null }),
-    image: values.image ?? ctx.config.image,
-  });
-  await recordBakeConfig({ provider: ctx.provider.id, repo: spec });
-  console.log(`baked ${result.summary}`);
+  const token = await holdBakeLock({ provider: ctx.provider.id, repo });
+  try {
+    const result = await ctx.provider.bake({
+      repo: spec,
+      credentials: await resolveCredentials({ config: ctx.config, repo, doppler: values.doppler ?? null }),
+      image: values.image ?? ctx.config.image,
+    });
+    await recordBakeConfig({ provider: ctx.provider.id, repo: spec });
+    await clearBakeFailure({ provider: ctx.provider.id, repo: spec });
+    console.log(`baked ${result.summary}`);
+  } catch (err) {
+    if (err instanceof CommandFailedError) {
+      await recordBakeFailure({ provider: ctx.provider.id, repo: spec, at: new Date(), log: process.env[BAKE_LOG_ENV] || null });
+    }
+    throw err;
+  } finally {
+    await releaseBakeLock({ provider: ctx.provider.id, repo, token });
+  }
 };
+
+/**
+ * One bake per provider and repo at a time. A background bake inherits the
+ * lock its launcher took; any other bake takes it here, and fails while
+ * another bake holds it.
+ */
+async function holdBakeLock({ provider, repo }: { provider: string; repo: string }) {
+  const inherited = process.env[BAKE_LOCK_TOKEN_ENV];
+  const holder = await bakeLockHolder({ provider, repo });
+  if (inherited && (holder === null || holder.token === inherited)) return inherited;
+  if (holder) throw alreadyBaking({ provider, repo, holder });
+  const lock = await acquireBakeLock({ provider, repo, pid: process.pid, log: null });
+  if (lock.acquired) return lock.token;
+  throw alreadyBaking({ provider, repo, holder: lock.holder });
+}
+
+function alreadyBaking({ provider, repo, holder }: { provider: string; repo: string; holder: BakeLock }) {
+  const where = holder.log ? `, log: ${holder.log}` : '';
+  return new Error(
+    `a bake of ${repo} on ${provider} is already running (pid ${holder.pid}${where}); boxes start from it once it finishes, so do not bake again`
+  );
+}
 
 async function deleteBake({ ctx, repo }: { ctx: Context; repo: RepoSpec }) {
   const slug = `${repo.owner}/${repo.name}`;

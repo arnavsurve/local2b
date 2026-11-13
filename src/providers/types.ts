@@ -168,7 +168,12 @@ export type Provider = {
   id: string;
   /** Makes whatever base the provider needs before any bake; returns a summary line. */
   prepare(): Promise<string>;
-  /** Makes the repo's bake, so later starts are fast. */
+  /**
+   * Makes the repo's bake, so later starts are fast. It replaces the previous
+   * bake only once the new one is complete: while it runs, and if it fails,
+   * starts use the previous bake. Whatever a failed bake leaves behind does
+   * not stop the next bake.
+   */
   bake(opts: { repo: RepoSpec; credentials: Credentials; image: string | null }): Promise<BakeResult>;
   /** When the repo's current bake was made, or null when there is none or its age is unknown. */
   bakedAt(opts: { repo: RepoSpec }): Promise<Date | null>;
@@ -198,7 +203,11 @@ export class ProviderAuthError extends Error {
   }
 }
 
-/** Thrown when a step a provider runs for the user fails; l2b exits with its code. */
+/**
+ * Thrown when a repo command a provider runs (setup, install, warm, the
+ * clone) exits non-zero; l2b exits with its code. Any other failure (the
+ * provider's API, the network) is a plain error, which is worth retrying.
+ */
 export class CommandFailedError extends Error {
   constructor(
     readonly what: string,

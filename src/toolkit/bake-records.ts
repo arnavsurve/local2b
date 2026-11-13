@@ -1,16 +1,11 @@
-import { mkdir } from 'node:fs/promises';
-import { homedir } from 'node:os';
-import { dirname, join } from 'node:path';
 import { z } from 'zod';
+import { statePath, writeJsonAtomic } from '../state';
 import { snapshotName } from './layout';
 import type { MachineHost } from './machine';
 
 const bakeTimesSchema = z.record(z.string(), z.iso.datetime());
 
-function bakeTimesPath() {
-  const stateHome = process.env.XDG_STATE_HOME ?? join(homedir(), '.local', 'state');
-  return join(stateHome, 'l2b', 'bakes.json');
-}
+const bakeTimesPath = () => statePath('bakes.json');
 
 async function readBakeTimes() {
   const file = Bun.file(bakeTimesPath());
@@ -39,10 +34,9 @@ export async function recordBake({
   await writeBakeTimes(times);
 }
 
+/** Replaced in one rename: the new bake time appears only once the bake is complete, and never half-written. */
 async function writeBakeTimes(times: Record<string, string>) {
-  const path = bakeTimesPath();
-  await mkdir(dirname(path), { recursive: true });
-  await Bun.write(path, JSON.stringify(times, null, 2));
+  await writeJsonAtomic({ path: bakeTimesPath(), value: times });
 }
 
 /** Drops the record of when `repo` was baked on `provider`. */

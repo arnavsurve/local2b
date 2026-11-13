@@ -21,6 +21,7 @@ async function setup() {
     env: null,
     config: {},
     clock: fakeClock({ start: Date.now() }),
+    background: 'inert',
   });
   cleanups.push(made.cleanup);
   return made;

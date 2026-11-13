@@ -1,7 +1,7 @@
 import type { Config } from '../../config';
 import { step } from '../../progress';
 import { bakeScript } from '../../toolkit/git-scripts';
-import { checkoutDir, mirrorDir, snapshotName } from '../../toolkit/layout';
+import { bakeBoxName, checkoutDir, mirrorDir, snapshotName } from '../../toolkit/layout';
 import { configureGit, pushEnv, runChecked, runSetup, scrubCreds, writeCredentials } from '../../toolkit/session';
 import { machineWorkflow } from '../../toolkit/workflow';
 import type { Box, Provider } from '../types';
@@ -28,14 +28,15 @@ export function createBoatProvider({ config, idle }: { config: Config['boat']; i
    * Clones and installs in a bake box, then stops it so boat keeps its disk
    * (at least 14 days). Credentials live only in tmpfs, which a stop drops;
    * they are scrubbed first anyway. A failed bake leaves its box up for
-   * inspection until it expires.
+   * inspection until it expires or the next bake replaces it.
    */
   const bake: Provider['bake'] = async ({ repo, credentials, image }) => {
     const slug = `${repo.owner}/${repo.name}`;
     const label = savedSnapshotName({ name: snapshotName(slug) });
-    const bakeName = `bake-${repo.name}`;
+    const bakeName = bakeBoxName(slug);
     if (await hosts.boxes.exists({ name: bakeName })) {
-      throw new Error(`stale bake sandbox "${bakeName}" exists; run: l2b down ${bakeName}`);
+      step(`removing box "${bakeName}" left by an earlier bake`);
+      await (await hosts.boxes.connect({ name: bakeName })).destroy();
     }
     step(`creating bake box "${bakeName}"`);
     const machine = await hosts.startBake({ name: bakeName, bake: label, image: image ?? hosts.boxes.defaultImage });

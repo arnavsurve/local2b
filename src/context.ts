@@ -2,6 +2,7 @@ import { loadConfig, type Config } from './config';
 import { createProvider, PROVIDER_IDS, type ProviderId } from './providers';
 import { resolveValue } from './secrets';
 import { resolveProviderId } from './providers/select';
+import { COMPILED } from './runtime';
 import type { Provider } from './providers/types';
 
 export type Context = {
@@ -20,6 +21,8 @@ export type Context = {
   env: string | null;
   /** Where `.l2b.json` and the local checkout are looked up from. */
   cwd: string;
+  /** The argv that runs this l2b again, for work it hands to a background process. */
+  l2b: string[];
 };
 
 function providerFor({
@@ -87,6 +90,7 @@ export async function createContext({ flag }: { flag: string | null }) {
     flag,
     env: process.env.L2B_PROVIDER || null,
     cwd: process.cwd(),
+    l2b: COMPILED ? [process.execPath] : [process.execPath, Bun.main],
   });
 }
 

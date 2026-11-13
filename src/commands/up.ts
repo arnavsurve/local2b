@@ -1,10 +1,11 @@
 import { parseArgs } from 'node:util';
 import { recordBoxStart } from '../box-records';
 import { requirePositional } from '../args';
+import { keepBakeCurrent } from '../auto-bake';
 import type { Command } from '../context';
 import { COMMAND_HELP } from '../help';
 import { warnIfUnconfigured } from '../hints';
-import { startOptsFor, warnIfStale } from '../start';
+import { startOptsFor } from '../start';
 import { branchFor, resolveTarget } from '../target';
 
 export const up: Command = async ({ ctx: base, args }) => {
@@ -24,7 +25,7 @@ export const up: Command = async ({ ctx: base, args }) => {
   const target = await resolveTarget({ ctx: base, repo: values.repo ?? null });
   const { ctx, repo } = target;
   const branch = branchFor({ target, flag: values.branch ?? null });
-  const start = await startOptsFor({
+  const requested = await startOptsFor({
     ctx,
     name,
     repo,
@@ -34,8 +35,8 @@ export const up: Command = async ({ ctx: base, args }) => {
     doppler: values.doppler ?? null,
     image: values.image ?? null,
   });
-  warnIfUnconfigured({ target, repo: start.repo });
-  await warnIfStale({ ctx, start });
+  warnIfUnconfigured({ target, repo: requested.repo });
+  const start = await keepBakeCurrent({ ctx, start: requested, doppler: values.doppler ?? null });
   const box = await ctx.provider.start(start);
   await recordBoxStart({
     provider: ctx.provider.id,

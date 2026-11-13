@@ -10,7 +10,7 @@ afterEach(() => {
 });
 
 async function localBox() {
-  const fake = fakeProvider({ id: 'fake', clock: fakeClock({ start: Date.now() }), failure: null });
+  const fake = fakeProvider({ id: 'fake', clock: fakeClock({ start: Date.now() }), failure: null, root: null });
   cleanups.push(fake.cleanup);
   return fake.provider.start({
     name: 'b',

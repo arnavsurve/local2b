@@ -27,6 +27,7 @@ async function boxEmail({ config }: { config: Record<string, unknown> }) {
     env: null,
     config,
     clock: fakeClock({ start: Date.now() }),
+    background: 'inert',
   });
   cleanups.push(made.cleanup);
   const log = spyOn(console, 'log').mockImplementation(() => {});
