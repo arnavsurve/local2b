@@ -1,5 +1,8 @@
 # local2b
 
+<img width="3888" height="1784" alt="sebastian-schuster-dkKgXnqFkjE-unsplash" src="https://github.com/user-attachments/assets/b3979a53-dc14-4f96-ab0e-8833d9137ccb" />
+
+
 Run heavy repo work on remote sandboxes instead of your laptop: typechecks, test suites, installs, dev servers. For coding agents and people.
 
     l2b run --repo my-org/my-repo --branch feature/x -- yarn test
