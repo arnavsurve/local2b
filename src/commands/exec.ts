@@ -3,6 +3,7 @@ import { joinCommand, requirePositional, splitOnDoubleDash } from '../args';
 import type { Command } from '../context';
 import { connectBox } from '../find-box';
 import { COMMAND_HELP, usageError } from '../help';
+import { hintOnExit } from '../hints';
 import { startJob } from '../jobs';
 import { toProcess } from '../start';
 
@@ -23,5 +24,7 @@ export const exec: Command = async ({ ctx, args }) => {
     console.error(`started; check with: l2b logs ${name} ${id}`);
     return;
   }
-  process.exitCode = await box.exec({ cmd: joinCommand(tail), cwd: values.cwd ?? null, onOutput: toProcess });
+  const exitCode = await box.exec({ cmd: joinCommand(tail), cwd: values.cwd ?? null, onOutput: toProcess });
+  process.exitCode = exitCode;
+  hintOnExit({ exitCode });
 };

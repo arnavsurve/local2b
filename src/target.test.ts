@@ -125,7 +125,7 @@ test('a .l2b.json naming another repo fails when it is the nearest', async () =>
   await expect(stderrOf(() => up({ ctx, args: ['b'] }))).rejects.toThrow(
     `${join(made.work, PROJECT_FILE)} is for o/elsewhere, not o/r`
   );
-  await expect(stderrOf(() => up({ ctx: made.ctx, args: ['c', '--repo', 'o/r'] }))).resolves.toBe('');
+  await expect(stderrOf(() => up({ ctx: made.ctx, args: ['c', '--repo', 'o/r'] }))).resolves.not.toContain('is for');
 });
 
 test('a .l2b.json with a repo supplies --repo outside a checkout', async () => {

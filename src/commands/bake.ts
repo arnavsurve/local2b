@@ -7,6 +7,7 @@ import { COMMAND_HELP } from '../help';
 import type { Command } from '../context';
 import { formatAge } from '../snapshots';
 import { resolveTarget } from '../target';
+import { warnIfUnconfigured } from '../hints';
 
 /**
  * Makes the repo's bake on the selected provider, so later boxes start fast.
@@ -26,7 +27,8 @@ export const bake: Command = async ({ ctx: base, args }) => {
       'if-older-than': { type: 'string' },
     },
   });
-  const { ctx, repo } = await resolveTarget({ ctx: base, repo: positionals[0] ?? null });
+  const target = await resolveTarget({ ctx: base, repo: positionals[0] ?? null });
+  const { ctx, repo } = target;
   if (!repo) throw new Error(`usage: ${COMMAND_HELP.bake.usage}\n(no repo given, and none found from ${base.cwd})`);
   const spec = repoSpecFor({
     config: ctx.config,
@@ -35,6 +37,7 @@ export const bake: Command = async ({ ctx: base, args }) => {
     warm: values.warm ?? null,
     baseBranch: values.branch ?? null,
   });
+  warnIfUnconfigured({ target, repo: spec });
   const skipIfNewerThanMs = values['if-older-than'] ? parseDuration(values['if-older-than']) : null;
   if (skipIfNewerThanMs !== null) {
     const bakedAt = await ctx.provider.bakedAt({ repo: spec });
