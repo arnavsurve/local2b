@@ -1,3 +1,4 @@
+import { expiredMessage, readBoxRecord, touchBox } from './box-records';
 import type { Context } from './context';
 import { ProviderAuthError, type Provider } from './providers/types';
 
@@ -43,11 +44,18 @@ export async function findBoxProvider({ ctx, name }: { ctx: Context; name: strin
   const skipped = probes.flatMap((p) => (p.outcome === 'skipped' ? [p] : []));
   const [firstSkipped] = skipped;
   if (firstSkipped && skipped.length === probes.length) throw firstSkipped.error;
+  const reachable = probes.filter((p) => p.outcome === 'absent').map((p) => p.provider.id);
+  const record = await readBoxRecord({ name, providers: reachable });
+  if (record) throw new Error(expiredMessage({ record, now: new Date() }));
   const note = skipped.length ? `; skipped, cannot authenticate: ${skipped.map((p) => p.provider.id).join(', ')}` : '';
   const where = searched.map((p) => p.id).join(', ');
   throw new Error(`no sandbox named "${name}" on ${where} (try: l2b ls)${note}`);
 }
 
+/** Connects to the box and counts it as l2b activity. */
 export async function connectBox({ ctx, name }: { ctx: Context; name: string }) {
-  return (await findBoxProvider({ ctx, name })).connect({ name });
+  const provider = await findBoxProvider({ ctx, name });
+  const box = await provider.connect({ name });
+  await touchBox({ provider: provider.id, name, at: new Date() });
+  return box;
 }
