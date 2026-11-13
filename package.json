@@ -1,6 +1,6 @@
 {
   "name": "local2b",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Spin up remote dev sandboxes for coding agents and your own shell",
   "license": "MIT",
   "private": true,
