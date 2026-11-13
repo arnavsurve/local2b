@@ -1,10 +1,11 @@
 import { parseArgs } from 'node:util';
 import { recordBoxStart } from '../box-records';
 import { joinCommand, splitOnDoubleDash } from '../args';
-import { selectForRepo, type Command } from '../context';
+import type { Command } from '../context';
 import { usageError } from '../help';
 import { generatedBoxName, runOnce } from '../run-once';
 import { startOptsFor, toProcess, warnIfStale } from '../start';
+import { branchFor, resolveTarget } from '../target';
 
 /** One call for one-off work: box up, run, box gone. Exits with the command's exit code. */
 export const run: Command = async ({ ctx: base, args }) => {
@@ -23,14 +24,15 @@ export const run: Command = async ({ ctx: base, args }) => {
       install: { type: 'string' },
     },
   });
-  const repo = values.repo ?? null;
-  const ctx = selectForRepo({ ctx: base, repo });
+  const target = await resolveTarget({ ctx: base, repo: values.repo ?? null });
+  const { ctx, repo } = target;
+  const branch = branchFor({ target, flag: values.branch ?? null });
   const name = values.name ?? generatedBoxName({ repo });
   const start = await startOptsFor({
     ctx,
     name,
     repo,
-    branch: values.branch ?? null,
+    branch,
     source: values.full ? 'fresh' : 'bake',
     install: values.install ?? null,
     doppler: values.doppler ?? null,
@@ -51,7 +53,7 @@ export const run: Command = async ({ ctx: base, args }) => {
     provider: ctx.provider.id,
     name,
     repo,
-    branch: values.branch ?? null,
+    branch,
     idleMinutes: ctx.config.idle.minutes,
     at: new Date(),
   });

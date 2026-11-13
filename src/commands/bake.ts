@@ -1,14 +1,15 @@
 import { parseArgs } from 'node:util';
-import { requirePositional } from '../args';
 import { resolveCredentials } from '../credentials';
 import { parseDuration } from '../duration';
 import { repoSpecFor } from '../repo';
 import { COMMAND_HELP } from '../help';
-import { selectForRepo, type Command } from '../context';
+import type { Command } from '../context';
 import { formatAge } from '../snapshots';
+import { resolveTarget } from '../target';
 
 /**
  * Makes the repo's bake on the selected provider, so later boxes start fast.
+ * The repo defaults to the checkout in cwd, as for `up`; the branch does not.
  * `--if-older-than` skips the work while the current bake is recent enough.
  */
 export const bake: Command = async ({ ctx: base, args }) => {
@@ -24,12 +25,8 @@ export const bake: Command = async ({ ctx: base, args }) => {
       'if-older-than': { type: 'string' },
     },
   });
-  const repo = requirePositional({
-    positionals,
-    index: 0,
-    usage: COMMAND_HELP.bake.usage,
-  });
-  const ctx = selectForRepo({ ctx: base, repo });
+  const { ctx, repo } = await resolveTarget({ ctx: base, repo: positionals[0] ?? null });
+  if (!repo) throw new Error(`usage: ${COMMAND_HELP.bake.usage}\n(no repo given, and none found from ${base.cwd})`);
   const spec = repoSpecFor({
     config: ctx.config,
     repo,

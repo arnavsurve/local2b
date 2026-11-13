@@ -375,7 +375,8 @@ export async function fakeContractSubject(): Promise<ContractSubject> {
 /**
  * A context with several named fake providers sharing one clock. The first is
  * the config default; `configured` lists the ones searched when addressing a
- * box by name. Repos clone from local origins created by `addOrigin`.
+ * box by name. Repos clone from local origins created by `addOrigin`. The
+ * context's cwd is an empty directory outside any checkout.
  */
 export function fakeContext({
   providers,
@@ -393,6 +394,7 @@ export function fakeContext({
   clock: FakeClock;
 }) {
   const originRoot = mkdtempSync(join(tmpdir(), 'l2b-origins-'));
+  const cwd = mkdtempSync(join(tmpdir(), 'l2b-cwd-'));
   const fakes = providers.map(({ id, failure }) => fakeProvider({ id, clock, failure }));
   const [first] = fakes;
   if (!first) throw new Error('fakeContext needs at least one provider');
@@ -403,6 +405,7 @@ export function fakeContext({
     defaultId: first.provider.id,
     flag,
     env,
+    cwd,
   });
   const fake = (id: string) => {
     const found = fakes.find((f) => f.provider.id === id);
@@ -416,6 +419,7 @@ export function fakeContext({
     cleanup: () => {
       for (const f of fakes) f.cleanup();
       rmSync(originRoot, { recursive: true, force: true });
+      rmSync(cwd, { recursive: true, force: true });
     },
   };
 }

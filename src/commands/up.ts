@@ -1,9 +1,10 @@
 import { parseArgs } from 'node:util';
 import { recordBoxStart } from '../box-records';
 import { requirePositional } from '../args';
-import { selectForRepo, type Command } from '../context';
+import type { Command } from '../context';
 import { COMMAND_HELP } from '../help';
 import { startOptsFor, warnIfStale } from '../start';
+import { branchFor, resolveTarget } from '../target';
 
 export const up: Command = async ({ ctx: base, args }) => {
   const { values, positionals } = parseArgs({
@@ -19,12 +20,14 @@ export const up: Command = async ({ ctx: base, args }) => {
     },
   });
   const name = requirePositional({ positionals, index: 0, usage: COMMAND_HELP.up.usage });
-  const ctx = selectForRepo({ ctx: base, repo: values.repo ?? null });
+  const target = await resolveTarget({ ctx: base, repo: values.repo ?? null });
+  const { ctx, repo } = target;
+  const branch = branchFor({ target, flag: values.branch ?? null });
   const start = await startOptsFor({
     ctx,
     name,
-    repo: values.repo ?? null,
-    branch: values.branch ?? null,
+    repo,
+    branch,
     source: values.full ? 'fresh' : 'bake',
     install: values.install ?? null,
     doppler: values.doppler ?? null,
@@ -35,8 +38,8 @@ export const up: Command = async ({ ctx: base, args }) => {
   await recordBoxStart({
     provider: ctx.provider.id,
     name,
-    repo: values.repo ?? null,
-    branch: values.branch ?? null,
+    repo,
+    branch,
     idleMinutes: ctx.config.idle.minutes,
     at: new Date(),
   });
