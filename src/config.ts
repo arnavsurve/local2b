@@ -11,6 +11,8 @@ import { secretSourceSchema, valueRefSchema } from './secrets';
 export const e2bConfigSchema = z
   .object({
   apiKey: valueRefSchema.default({ from: 'env', name: 'E2B_API_KEY' }),
+  /** Name of the base image (an e2b template) l2b builds and starts boxes from. */
+  template: z.string().regex(/^[a-z0-9][a-z0-9_-]*$/, 'lowercase letters, digits, - and _').default('l2b-dev'),
   cpuCount: z.number().int().positive().default(4),
   memoryMB: z.number().int().positive().default(8192),
   /** Tooling baked into the base image. Defaults to everything; drop what you do not need. */

@@ -1,6 +1,7 @@
 import { step } from '../progress';
 import type { Box, Provider, RepoSpec, StartOpts, Terminal } from '../providers/types';
 import { shellQuote } from '../shell';
+import { baseImageCurrent, buildBaseImage, ensureBaseImage } from './base-image';
 import { forgetBake, lookupSnapshot, recordBake, recordedBakes } from './bake-records';
 import { bakeScript, cloneCommand, switchScript } from './git-scripts';
 import { bakeBoxName, checkoutDir, mirrorDir, snapshotName } from './layout';
@@ -107,6 +108,7 @@ export function machineWorkflow({ host }: { host: MachineHost }): Provider {
   async function start({ name, repo, branch, source, image, idle, credentials, gitIdentity }: StartOpts) {
     step('looking for a baked snapshot');
     const snapshot = repo && source === 'bake' ? await lookupSnapshot({ provider: host, repo: slugOf(repo) }) : null;
+    if (!snapshot && image === null) await ensureBaseImage({ host });
     const workdir = repo ? checkoutDir({ homeDir: host.homeDir, repo: slugOf(repo) }) : host.homeDir;
     step(`creating box "${name}"`);
     const machine = await host.create({ name, image: snapshot?.id ?? image ?? host.defaultImage, workdir, idle });
@@ -137,6 +139,7 @@ export function machineWorkflow({ host }: { host: MachineHost }): Provider {
       step(`removing box "${bakeName}" left by an earlier bake`);
       await (await host.connect({ name: bakeName })).destroy();
     }
+    if (image === null) await ensureBaseImage({ host });
     step(`creating bake box "${bakeName}"`);
     const machine = await host.create({ name: bakeName, image: image ?? host.defaultImage, workdir: host.homeDir, idle: null });
     await writeCredentials({ box: machine, credentials });
@@ -193,6 +196,15 @@ export function machineWorkflow({ host }: { host: MachineHost }): Provider {
     });
   }
 
+  /**
+   * A bake made on an older base image reports no age, so core makes it
+   * again, which also rebuilds the base image, while starts keep using it.
+   */
+  async function bakedAt({ repo }: { repo: RepoSpec }) {
+    if (!(await baseImageCurrent({ host }))) return null;
+    return (await lookupSnapshot({ provider: host, repo: slugOf(repo) }))?.createdAt ?? null;
+  }
+
   async function deleteBake({ repo }: { repo: RepoSpec }) {
     const slug = slugOf(repo);
     const deleted = await host.deleteSnapshot({ name: snapshotName(slug) });
@@ -202,11 +214,11 @@ export function machineWorkflow({ host }: { host: MachineHost }): Provider {
 
   return {
     id: host.id,
-    prepare: async () => `built image ${await host.buildImage()}`,
+    prepare: async () => `built image ${await buildBaseImage({ host })}`,
     bake,
     bakes,
     deleteBake,
-    bakedAt: async ({ repo }) => (await lookupSnapshot({ provider: host, repo: slugOf(repo) }))?.createdAt ?? null,
+    bakedAt,
     start,
     connect: async ({ name }) => asBox({ name, machine: await host.connect({ name }) }),
     exists: (opts) => host.exists(opts),
