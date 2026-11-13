@@ -3,7 +3,7 @@ import { bakeConfigHash } from './bake-config';
 import type { RepoSpec } from './providers/types';
 import { statePath, writeJsonAtomic } from './state';
 
-/** A failed bake is not retried in the background with the same settings for this long. */
+/** A bake whose repo command failed is not retried in the background with the same settings for this long; other failures are retried on the next start. */
 export const BAKE_RETRY_AFTER_MS = 3_600_000;
 
 const failureSchema = z.object({ config: z.string(), at: z.iso.datetime(), log: z.string().nullable() });

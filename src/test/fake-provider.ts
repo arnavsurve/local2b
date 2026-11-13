@@ -8,6 +8,7 @@ import { configSchema } from '../config';
 import { buildContext } from '../context';
 import type { ContractSubject } from '../providers/contract';
 import {
+  CommandFailedError,
   ProviderAuthError,
   UnsupportedError,
   type Box,
@@ -134,7 +135,7 @@ export function fakeProvider({ id, clock, failure, root: given }: { id: string; 
   async function checked({ what, ...opts }: { what: string; cmd: string; cwd: string; env: Record<string, string> }) {
     let stderr = '';
     const code = await spawn({ ...opts, onOutput: (o) => (stderr += o.stream === 'stderr' ? o.data : '') });
-    if (code !== 0) throw new Error(`${what} failed (exit ${code}): ${stderr.trim()}`);
+    if (code !== 0) throw new CommandFailedError(`${what}${stderr.trim() ? ` (${stderr.trim()})` : ''}`, code);
   }
 
   async function prepareCheckout({

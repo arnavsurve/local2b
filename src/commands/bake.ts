@@ -8,7 +8,7 @@ import { parseDuration } from '../duration';
 import { repoSpecFor } from '../repo';
 import { COMMAND_HELP } from '../help';
 import type { Command, Context } from '../context';
-import type { RepoSpec } from '../providers/types';
+import { CommandFailedError, type RepoSpec } from '../providers/types';
 import { formatAge } from '../snapshots';
 import { resolveTarget } from '../target';
 import { warnIfUnconfigured } from '../hints';
@@ -73,7 +73,9 @@ export const bake: Command = async ({ ctx: base, args }) => {
     await clearBakeFailure({ provider: ctx.provider.id, repo: spec });
     console.log(`baked ${result.summary}`);
   } catch (err) {
-    await recordBakeFailure({ provider: ctx.provider.id, repo: spec, at: new Date(), log: process.env[BAKE_LOG_ENV] || null });
+    if (err instanceof CommandFailedError) {
+      await recordBakeFailure({ provider: ctx.provider.id, repo: spec, at: new Date(), log: process.env[BAKE_LOG_ENV] || null });
+    }
     throw err;
   } finally {
     await releaseBakeLock({ provider: ctx.provider.id, repo, token });

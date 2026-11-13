@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { $ } from 'bun';
 import { bakeConfigState } from '../bake-config';
+import { recentBakeFailure } from '../bake-failures';
 import { acquireBakeLock } from '../bake-lock';
 import { repoSpecFor } from '../repo';
 import { fakeClock, fakeContext } from '../test/fake-provider';
@@ -93,4 +94,27 @@ test('bake refuses to start while another bake of the repo runs, and says where 
     `a bake of o/r on a is already running (pid ${other.pid}, log: /tmp/bake.log); boxes start from it once it finishes, so do not bake again`
   );
   expect(await stdoutOf(() => bake({ ctx, args: ['o/other'] }))).toContain('baked a:o/other');
+});
+
+test('a bake whose repo command fails is recorded as failed; a provider failure is not, so it is retried', async () => {
+  const made = fakeContext({
+    providers: [
+      { id: 'a', failure: null },
+      { id: 'down', failure: 'network' },
+    ],
+    configured: ['a', 'down'],
+    flag: null,
+    env: null,
+    config: { repos: { 'o/r': { warm: 'exit 3' } } },
+    clock: fakeClock({ start: Date.now() }),
+    background: 'inert',
+  });
+  cleanups.push(made.cleanup);
+  await made.addOrigin({ repo: 'o/r' });
+  const spec = repoSpecFor({ config: made.ctx.config, repo: 'o/r', install: null, warm: null, baseBranch: null });
+  const now = new Date();
+  await expect(stdoutOf(() => bake({ ctx: made.ctx, args: ['o/r'] }))).rejects.toThrow('exit 3');
+  expect(await recentBakeFailure({ provider: 'a', repo: spec, now })).not.toBeNull();
+  await expect(stdoutOf(() => bake({ ctx: { ...made.ctx, flag: 'down' }, args: ['o/r'] }))).rejects.toThrow('unreachable');
+  expect(await recentBakeFailure({ provider: 'down', repo: spec, now })).toBeNull();
 });

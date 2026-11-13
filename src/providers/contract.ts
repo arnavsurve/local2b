@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { randomBytes } from 'node:crypto';
 import { runOnce as runOnceOn } from '../run-once';
-import { UnsupportedError, type Box, type Credentials, type ExecOutput, type Provider, type RepoSpec } from './types';
+import { CommandFailedError, UnsupportedError, type Box, type Credentials, type ExecOutput, type Provider, type RepoSpec } from './types';
 
 /** What a provider under test supplies to the contract suite. */
 export type ContractSubject = {
@@ -361,12 +361,12 @@ export function describeProviderContract({
       }
     }, timeoutMs);
 
-    test('a failed re-bake leaves the previous bake in use and does not block the next bake', async () => {
+    test('a re-bake whose repo command fails throws CommandFailedError, leaves the previous bake in use and does not block the next bake', async () => {
       const warmed = (warm: string): RepoSpec => ({ ...repo(), warm });
       const first = await subject.provider.bake({ repo: warmed(`touch ${WARM_MARKER}`), credentials: credentials({ value: canary }), image: null });
       await expect(
         subject.provider.bake({ repo: warmed('exit 7'), credentials: credentials({ value: canary }), image: null })
-      ).rejects.toThrow();
+      ).rejects.toBeInstanceOf(CommandFailedError);
       expect((await subject.provider.bakedAt({ repo: repo() }))?.getTime()).toBe(first.bakedAt.getTime());
       const box = await subject.provider.start({
         name: uniqueName('contract'),
@@ -434,7 +434,7 @@ export function describeProviderContract({
       await expectGone(boxName);
     }, timeoutMs);
 
-    test('a start that fails leaves no box behind', async () => {
+    test('a start whose install fails throws CommandFailedError and leaves no box behind', async () => {
       const name = uniqueName('contract-bad');
       const broken: RepoSpec = { ...repo(), install: 'exit 9' };
       await expect(
@@ -448,7 +448,7 @@ export function describeProviderContract({
           credentials: credentials({ value: canary }),
           gitIdentity: null,
         })
-      ).rejects.toThrow();
+      ).rejects.toBeInstanceOf(CommandFailedError);
       await expectGone(name);
     }, timeoutMs);
 

@@ -203,7 +203,11 @@ export class ProviderAuthError extends Error {
   }
 }
 
-/** Thrown when a step a provider runs for the user fails; l2b exits with its code. */
+/**
+ * Thrown when a repo command a provider runs (setup, install, warm, the
+ * clone) exits non-zero; l2b exits with its code. Any other failure (the
+ * provider's API, the network) is a plain error, which is worth retrying.
+ */
 export class CommandFailedError extends Error {
   constructor(
     readonly what: string,
