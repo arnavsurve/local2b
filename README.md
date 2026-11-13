@@ -91,7 +91,7 @@ Boxes expire 15 minutes after the last l2b activity, with no local process neede
 
 ### Base image
 
-Before a start without a bake, and before a bake, the provider makes sure its base image exists and matches the image settings. If it is missing, or was built from other settings, l2b builds it first and prints `preparing the base image <name> (first use|image settings changed; several minutes, once)`. A hash of what the image is built from is kept in `$XDG_STATE_HOME/l2b/images.json`. One l2b process builds at a time; others print `waiting for another l2b process` and wait. An image already on the provider that this machine has no record of is used as it is and recorded, so a new machine does not rebuild a shared image. A bake made on an older base image counts as out of date.
+Before a start without a bake, and before a bake, the provider makes sure its base image exists and matches the image settings. If it is missing, or was built from other settings, l2b builds it first and prints `preparing the base image <name> (first use|image settings changed; several minutes, once)`. A hash of what the image is built from is kept in `$XDG_STATE_HOME/l2b/images.json`. One l2b process builds at a time; others print `waiting for another l2b process` and wait. An image already on the provider that this machine has no record of is used as it is and recorded, so a new machine does not rebuild a shared image. Boxes and bakes are created from the exact base image build l2b prepared or confirmed, not from the image's name, so a bake made right after a rebuild has the new tools. A bake made on an older base image, or on another build of it, counts as out of date and is made again in the background.
 
 ### Background bakes
 
@@ -114,10 +114,10 @@ A bake replaces the previous one only once it is complete, so boxes keep startin
 
 l2b keeps these under `$XDG_STATE_HOME/l2b/` (default `~/.local/state/l2b/`):
 
-- `bakes.json`: when each repo was baked. A bake made on another machine has no known age.
+- `bakes.json`: when each repo was baked, and on which base image build. A bake made on another machine has no known age.
 - `bake-configs.json`: a hash of the settings each bake used (`setup`, `install`, `warm`, `baseBranch`, `clone`, `env`).
 - `bake-failures.json`: the last bake per repo that failed on a repo command.
-- `images.json`: the recipe hash of each base image.
+- `images.json`: the recipe hash of each base image, and the build in use.
 - `boxes.json`: the boxes l2b started, with their repo, branch and last activity. `down` removes an entry, and entries unused for three days are dropped.
 - `locks/` and `logs/`: bake and image locks, and background bake logs.
 
@@ -256,7 +256,7 @@ Each provider has its own config block with its own API key, such as `e2b` below
 
 ### e2b
 
-Set `E2B_API_KEY`, or point `e2b.apiKey` at a value reference. The base image is an e2b template named by `e2b.template`. It is built on first use and rebuilt when the image settings below change; a template's build counts once it has a `default` tag.
+Set `E2B_API_KEY`, or point `e2b.apiKey` at a value reference. The base image is an e2b template named by `e2b.template`. It is built on first use and rebuilt when the image settings below change; a template's build counts once it has a `default` tag. l2b tags each build it uses with its own `l2b-<id>` tag and creates boxes and bakes from `<template>:<tag>`, so they run that exact build.
 
 A box expires through e2b's server-side timeout. l2b sets it to the idle window at creation and re-arms it with a heartbeat while a command or shell runs.
 
