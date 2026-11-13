@@ -41,6 +41,7 @@ async function boatSubject(): Promise<ContractSubject> {
     remoteUrl: `https://github.com/${owner}/${name}.git`,
     baseBranch: null,
     clone: { strategy: 'mirror' as const, depth: 50, filter: 'blob:limit=50m' },
+    setup: [],
     install: null,
     warm: null,
     env: {},

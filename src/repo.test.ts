@@ -24,6 +24,7 @@ test('a repo spec merges config with command-line overrides', () => {
     remoteUrl: 'https://github.com/o/r.git',
     baseBranch: 'develop',
     clone: { strategy: 'mirror', depth: 10, filter: null },
+    setup: [],
     install: 'yarn',
     warm: 'make gen',
     env: { A: '1' },

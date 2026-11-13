@@ -3,7 +3,7 @@ import { step } from '../../progress';
 import { bakeScript } from '../../toolkit/git-scripts';
 import { describeInstall, resolveInstall } from '../../toolkit/install';
 import { checkoutDir, mirrorDir, snapshotName } from '../../toolkit/layout';
-import { configureGit, pushEnv, runChecked, scrubCreds, writeCredentials } from '../../toolkit/session';
+import { configureGit, pushEnv, runChecked, runSetup, scrubCreds, writeCredentials } from '../../toolkit/session';
 import { machineWorkflow } from '../../toolkit/workflow';
 import type { Box, Provider } from '../types';
 import { createBoatHosts } from './machine';
@@ -43,10 +43,11 @@ export function createBoatProvider({ config, idle }: { config: Config['boat']; i
     await writeCredentials({ box: machine, credentials });
     await pushEnv({ box: machine, env: repo.env });
     if (credentials.git) await configureGit({ box: machine, host: credentials.git });
+    const inspect = `(sandbox ${bakeName} left up for inspection)`;
+    await runSetup({ box: machine, setup: repo.setup, failureNote: inspect });
     console.log(`clone strategy: ${repo.clone.strategy}`);
     step('cloning and installing dependencies (several minutes)');
     const dir = checkoutDir({ homeDir: machine.homeDir, repo: slug });
-    const inspect = `(sandbox ${bakeName} left up for inspection)`;
     await runChecked({
       box: machine,
       cwd: machine.homeDir,

@@ -3,6 +3,7 @@ import { toEnvFile } from '../secrets';
 import { credentialHelperCommand } from './git-credentials';
 import type { Machine } from './machine';
 import { shellQuote } from '../shell';
+import { step } from '../progress';
 
 export const ENV_FILE = '/dev/shm/l2b.env';
 
@@ -67,6 +68,18 @@ export function run({ box, cmd, cwd }: { box: Machine; cmd: string; cwd: string 
       (stream === 'stdout' ? process.stdout : process.stderr).write(data);
     },
   });
+}
+
+/**
+ * Runs a repo's setup commands in order in the box user's home, stopping at
+ * the first failure. `failureNote` is appended to the error, e.g. to say the
+ * box was left up.
+ */
+export async function runSetup({ box, setup, failureNote }: { box: Machine; setup: string[]; failureNote: string | null }) {
+  for (const cmd of setup) {
+    step(`setup: ${cmd}`);
+    await runChecked({ box, cwd: box.homeDir, what: `setup "${cmd}"${failureNote ? ` ${failureNote}` : ''}`, cmd });
+  }
 }
 
 export async function runChecked({

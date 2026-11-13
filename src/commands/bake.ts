@@ -1,4 +1,5 @@
 import { parseArgs } from 'node:util';
+import { BAKE_CONFIG_CHANGED, bakeConfigState, recordBakeConfig } from '../bake-config';
 import { resolveCredentials } from '../credentials';
 import { parseDuration } from '../duration';
 import { repoSpecFor } from '../repo';
@@ -38,17 +39,20 @@ export const bake: Command = async ({ ctx: base, args }) => {
   if (skipIfNewerThanMs !== null) {
     const bakedAt = await ctx.provider.bakedAt({ repo: spec });
     const ageMs = bakedAt ? Date.now() - bakedAt.getTime() : null;
-    if (ageMs !== null && ageMs < skipIfNewerThanMs) {
+    const changed = (await bakeConfigState({ provider: ctx.provider.id, repo: spec })) === 'changed';
+    if (ageMs !== null && ageMs < skipIfNewerThanMs && !changed) {
       console.log(
         `snapshot for ${repo} is ${formatAge({ hours: ageMs / 3_600_000 })} old, newer than ${values['if-older-than']}; skipping bake`
       );
       return;
     }
+    if (ageMs !== null && changed) console.log(`${BAKE_CONFIG_CHANGED}; baking`);
   }
   const result = await ctx.provider.bake({
     repo: spec,
     credentials: await resolveCredentials({ config: ctx.config, repo, doppler: values.doppler ?? null }),
     image: values.image ?? ctx.config.image,
   });
+  await recordBakeConfig({ provider: ctx.provider.id, repo: spec });
   console.log(`baked ${result.summary}`);
 };

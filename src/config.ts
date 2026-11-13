@@ -75,6 +75,8 @@ export const repoConfigSchema = z.object({
   gitHost: gitHostSchema.nullable().default(null),
   /** Branch the snapshot is baked from (the one you mostly work off), when it is not the repo's default branch. */
   baseBranch: z.string().nullable().default(null),
+  /** Shell commands run in the box user's home before the clone, at bake and on a start without a bake. */
+  setup: z.array(z.string().min(1)).default([]),
   /** Runs in the checkout on every `up`; keep it fast and incremental. */
   install: z.string().nullable().default(null),
   /** Extra one-time work at bake only (codegen, builds); its output ships in the snapshot. */
