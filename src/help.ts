@@ -33,7 +33,7 @@ export const COMMAND_HELP = {
   },
   bake: {
     usage: 'l2b bake [owner/repo] [--if-older-than 12h] [--delete]',
-    summary: 'build the per-repo snapshot (bare mirror + warm install)',
+    summary: 'bake the repo now (up and run already bake in the background when needed)',
     flags: [
       ['--if-older-than 12h', 'skip when the existing snapshot is newer'],
       ['--delete', "delete the repo's bake on the selected provider instead"],
@@ -107,7 +107,7 @@ export const COMMAND_HELP = {
   },
   image: {
     usage: 'l2b image build',
-    summary: 'build the base image for the configured provider',
+    summary: 'build the base image now (l2b builds it on its own when missing or out of date)',
     flags: [],
   },
   ls: {

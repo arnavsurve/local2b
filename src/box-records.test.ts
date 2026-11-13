@@ -57,7 +57,7 @@ test('a box l2b started that has since expired says so and how to start it again
 test('a name l2b never started keeps the generic error', async () => {
   const { ctx } = await setup();
   await expect(exec({ ctx, args: ['ghost', '--', 'true'] })).rejects.toThrow(
-    'no sandbox named "ghost" on fake (try: l2b ls)'
+    'no sandbox named "ghost" on fake; start one with `l2b up ghost`, or list running boxes with `l2b ls`'
   );
 });
 

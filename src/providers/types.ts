@@ -198,7 +198,7 @@ export type Provider = {
  */
 export class ProviderAuthError extends Error {
   constructor({ provider, hint }: { provider: string; hint: string }) {
-    super(`provider ${provider} cannot authenticate: ${hint}`);
+    super(`provider ${provider} cannot authenticate: ${hint}. Only the user can fix this: tell them l2b has no usable credentials for ${provider}`);
     this.name = 'ProviderAuthError';
   }
 }

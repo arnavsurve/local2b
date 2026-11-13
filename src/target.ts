@@ -27,7 +27,9 @@ export async function resolveTarget({ ctx, repo: flag }: { ctx: Context; repo: s
   }
   const repo = flag ?? checkoutRepo ?? project?.config.repo ?? null;
   if (repo && project?.config.repo && project.config.repo !== repo) {
-    throw new Error(`${project.path} is for ${project.config.repo}, not ${repo}`);
+    throw new Error(
+      `${project.path} is for ${project.config.repo}, not ${repo}; run l2b outside that directory, or pass --repo ${project.config.repo}`
+    );
   }
   const config = repo && project ? withProjectConfig({ config: ctx.config, repo, project: project.config }) : ctx.config;
   return {

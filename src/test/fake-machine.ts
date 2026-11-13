@@ -75,7 +75,7 @@ export function fakeMachineHost({
     },
     async connect({ name }) {
       guard();
-      if (!alive.has(name)) throw new Error(`no sandbox named "${name}" (try: l2b ls)`);
+      if (!alive.has(name)) throw new Error(`no sandbox named "${name}"; start one with \`l2b up ${name}\`, or list running boxes with \`l2b ls\``);
       return makeBox({ name, workdir: homeDir });
     },
     async list() {

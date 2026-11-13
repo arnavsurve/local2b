@@ -126,7 +126,7 @@ test('a name on both providers is ambiguous until --provider picks one', async (
 
 test('a missing name gives the usual error', async () => {
   const { ctx } = context({});
-  await expect(findBoxProvider({ ctx, name: 'ghost' })).rejects.toThrow('no sandbox named "ghost" on a, b (try: l2b ls)');
+  await expect(findBoxProvider({ ctx, name: 'ghost' })).rejects.toThrow('no sandbox named "ghost" on a, b; start one with `l2b up ghost`, or list running boxes with `l2b ls`');
 });
 
 test('only configured providers are searched', async () => {
@@ -149,7 +149,7 @@ test('implicit lookup skips a provider that cannot authenticate', async () => {
   await seedBox({ ctx, id: 'a', name: 'dev' });
   expect((await findBoxProvider({ ctx, name: 'dev' })).id).toBe('a');
   await expect(findBoxProvider({ ctx, name: 'ghost' })).rejects.toThrow(
-    'no sandbox named "ghost" on a, b (try: l2b ls); skipped, cannot authenticate: b'
+    'no sandbox named "ghost" on a, b; start one with `l2b up ghost`, or list running boxes with `l2b ls`; skipped, cannot authenticate: b'
   );
 });
 
@@ -164,7 +164,7 @@ test('lookup fails with the auth error when no provider can authenticate', async
 test('an explicit --provider that cannot authenticate is an error naming the key', async () => {
   const { ctx } = withBroken('auth');
   await expect(down({ ctx: { ...ctx, flag: 'b' }, args: ['dev'] })).rejects.toThrow(
-    'provider b cannot authenticate: set B_API_KEY'
+    'provider b cannot authenticate: set B_API_KEY. Only the user can fix this: tell them l2b has no usable credentials for b'
   );
 });
 
@@ -235,7 +235,7 @@ test('a provider with neither a block nor a key is not searched, but --provider 
   const configured = await configuredProviders({ config: configSchema.parse({}), env: {} });
   const { ctx } = realIds(configured);
   await seedBox({ ctx, id: 'boat', name: 'box' });
-  await expect(findBoxProvider({ ctx, name: 'box' })).rejects.toThrow('no sandbox named "box" on e2b (try: l2b ls)');
+  await expect(findBoxProvider({ ctx, name: 'box' })).rejects.toThrow('no sandbox named "box" on e2b; start one with `l2b up box`, or list running boxes with `l2b ls`');
   const log = spyOn(console, 'log').mockImplementation(() => {});
   await ls({ ctx, args: [] });
   const rows = log.mock.calls.length;

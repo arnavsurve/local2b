@@ -172,7 +172,7 @@ export function fakeProvider({ id, clock, failure, root: given }: { id: string; 
   const live = (name: string) => {
     expireIdle();
     const box = boxes.get(name);
-    if (!box) throw new Error(`no sandbox named "${name}" (try: l2b ls)`);
+    if (!box) throw new Error(`no sandbox named "${name}"; start one with \`l2b up ${name}\`, or list running boxes with \`l2b ls\``);
     return box;
   };
 
