@@ -43,6 +43,11 @@ export const COMMAND_HELP = {
       ['--warm cmd', 'command run after install to warm caches'],
     ],
   },
+  init: {
+    usage: 'l2b init',
+    summary: 'write a starter .l2b.json in the current directory',
+    flags: [],
+  },
   exec: {
     usage: 'l2b exec <name> [--cwd dir] [--detach] -- <cmd...>',
     summary: 'run a command in the box (default cwd: the repo checkout)',

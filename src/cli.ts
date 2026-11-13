@@ -10,6 +10,7 @@ import { ls } from './commands/ls';
 import { put } from './commands/put';
 import { run } from './commands/run';
 import { shell } from './commands/shell';
+import { init } from './commands/init';
 import { install } from './commands/install';
 import { up } from './commands/up';
 import { update } from './commands/update';
@@ -25,6 +26,7 @@ const commands: Record<CommandName, Command> = {
   up,
   image,
   bake,
+  init,
   exec,
   logs,
   jobs,
